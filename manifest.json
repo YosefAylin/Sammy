@@ -1,10 +1,21 @@
-{
+  {
     "name": "Sammy",
     "description": "Your summerization master",
     "version": "1.0",
     "manifest_version": 3,
+    "permissions": ["activeTab", "scripting"],
+    "host_permissions": ["*://*/*"],
+    "background": {
+    "service_worker": "script/background.js"
+    },
     "action": {
       "default_popup": "index.html",
-      "default_icon": "./Resources/Icon.png"
-    }
+      "default_icon": "Resources/Icon.png"
+    },
+    "content_scripts": [
+      {
+        "matches": ["<all_urls>"],
+        "js": ["script/content.js"]
+      }
+    ]
   }
