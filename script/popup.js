@@ -7,7 +7,17 @@ document.getElementById("scrape").addEventListener("click", () => {
     });
 });
 
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === "SCRAPED_DATA") {
-        document.getElementById("para").innerText = message.data;
+        var s = "";
+        for(var i=0; i<message.data.length;i++){
+            if(message.data[i].length > 75){
+                s = s.concat(message.data[i]) + '\n';
+            }
+        }
+        if(s == ""){
+            alert("Nothing To Sammerize, Please Try A Different Page")
+        }
+        document.getElementById("para").innerText = s;
 }});
