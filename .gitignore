@@ -30,3 +30,9 @@ Thumbs.db
 # Build directories
 build/
 dist/
+
+# Documentation (keep local)
+*.pdf
+
+# Environment variables
+.env

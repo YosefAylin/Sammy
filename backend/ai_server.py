@@ -239,81 +239,286 @@ class AIHebrewSummarizer:
         
         return sorted(scores, key=lambda x: x[0], reverse=True)
     
-    def extractive_summarize(self, text: str, top_n: int = 6) -> Dict[str, any]:
-        """Advanced extractive summarization using AlephBERT."""
+    def comprehensive_extractive_summarize(self, text: str, target_ratio: float = 0.35) -> Dict[str, any]:
+        """
+        Comprehensive extractive summarization following the guidelines:
+        - Captures main ideas from opening, middle, and closing sections
+        - Extracts essential content avoiding repetitions
+        - Creates flowing, coherent summary representing entire text
+        - Maintains 25-40% of original length
+        """
         start_time = time.time()
         
         try:
-            # Preprocess and split
+            # 1. Preprocess and analyze text structure
             clean_text = self.preprocess_hebrew_text(text)
             sentences = self.split_sentences(clean_text)
             
-            if len(sentences) < 3:
-                return {
-                    "summary": clean_text,
-                    "metadata": {
-                        "method": "no_summarization_needed",
-                        "original_sentences": len(sentences),
-                        "processing_time": time.time() - start_time
-                    }
-                }
+            if len(sentences) < 5:
+                return self._create_short_summary(clean_text, sentences, start_time)
             
-            # Get embeddings
+            # 2. Identify sections (opening, middle, closing)
+            sections = self._identify_text_sections(sentences)
+            
+            # 3. Get embeddings for all sentences
             embeddings = self.get_sentence_embeddings(tuple(sentences))
             
-            # Score sentences
-            scored_sentences = self.calculate_sentence_scores(sentences, embeddings)
-            
-            # Select top sentences
-            adaptive_top_n = min(top_n, max(3, len(sentences) // 3))
-            selected = scored_sentences[:adaptive_top_n]
-            
-            # Order by original position
-            selected.sort(key=lambda x: x[2])
-            
-            # Smart ordering (avoid connectors at start)
-            sentences_only = [s[1] for s in selected]
-            start_sentence = next(
-                (s for s in sentences_only if not any(s.startswith(c) for c in self.connectors)),
-                sentences_only[0]
+            # 4. Score sentences with section-aware algorithm
+            scored_sentences = self._comprehensive_sentence_scoring(
+                sentences, embeddings, sections
             )
             
-            if start_sentence in sentences_only:
-                sentences_only.remove(start_sentence)
-                final_sentences = [start_sentence] + sentences_only
-            else:
-                final_sentences = sentences_only
+            # 5. Select sentences ensuring representation from all sections
+            selected_sentences = self._select_representative_sentences(
+                scored_sentences, sections, target_ratio
+            )
             
-            summary = ' '.join(final_sentences)
+            # 6. Reorder and create flowing narrative
+            final_summary = self._create_flowing_summary(selected_sentences, sentences)
+            
+            # 7. Post-process for coherence
+            polished_summary = self._polish_summary_flow(final_summary)
             
             return {
-                "summary": summary,
+                "summary": polished_summary,
                 "metadata": {
-                    "method": "alephbert_extractive",
+                    "method": "comprehensive_extractive",
                     "original_sentences": len(sentences),
-                    "summary_sentences": len(final_sentences),
-                    "compression_ratio": len(final_sentences) / len(sentences),
+                    "summary_sentences": len(selected_sentences),
+                    "compression_ratio": len(selected_sentences) / len(sentences),
+                    "sections_represented": {
+                        "opening": len([s for s in selected_sentences if s[2] in sections['opening']]),
+                        "middle": len([s for s in selected_sentences if s[2] in sections['middle']]),
+                        "closing": len([s for s in selected_sentences if s[2] in sections['closing']])
+                    },
                     "processing_time": time.time() - start_time,
-                    "model": "AlephBERT + Advanced TextRank"
+                    "model": "AlephBERT + Comprehensive Algorithm"
                 }
             }
             
         except Exception as e:
-            logger.error(f"Extractive summarization failed: {e}")
+            logger.error(f"Comprehensive summarization failed: {e}")
             return self._fallback_summary(text, start_time)
     
-    def abstractive_summarize(self, text: str, max_length: int = 150) -> Dict[str, any]:
-        """Abstractive summarization using mT5."""
+    def _identify_text_sections(self, sentences: List[str]) -> Dict[str, List[int]]:
+        """Identify opening, middle, and closing sections."""
+        total = len(sentences)
+        opening_end = max(2, int(total * 0.25))
+        closing_start = min(total - 2, int(total * 0.75))
+        
+        return {
+            'opening': list(range(0, opening_end)),
+            'middle': list(range(opening_end, closing_start)),
+            'closing': list(range(closing_start, total))
+        }
+    
+    def _comprehensive_sentence_scoring(self, sentences: List[str], embeddings: np.ndarray, 
+                                      sections: Dict[str, List[int]]) -> List[Tuple[float, str, int]]:
+        """Enhanced scoring ensuring representation from all sections."""
+        # Base TextRank scoring
+        base_scores = self.calculate_sentence_scores(sentences, embeddings)
+        
+        # Section-aware enhancement
+        enhanced_scores = []
+        
+        for score, sentence, idx in base_scores:
+            enhanced_score = score
+            
+            # 1. Section representation bonus
+            if idx in sections['opening']:
+                enhanced_score *= 1.2  # Boost opening sentences
+            elif idx in sections['closing']:
+                enhanced_score *= 1.15  # Boost closing sentences
+            
+            # 2. Key insight detection
+            if self._contains_key_insights(sentence):
+                enhanced_score *= 1.3
+            
+            # 3. Transition and connector detection
+            if self._is_transition_sentence(sentence):
+                enhanced_score *= 1.1
+            
+            # 4. Avoid redundancy penalty
+            redundancy_penalty = self._calculate_redundancy_penalty(
+                sentence, [s[1] for s in enhanced_scores]
+            )
+            enhanced_score *= (1 - redundancy_penalty)
+            
+            enhanced_scores.append((enhanced_score, sentence, idx))
+        
+        return sorted(enhanced_scores, key=lambda x: x[0], reverse=True)
+    
+    def _contains_key_insights(self, sentence: str) -> bool:
+        """Detect sentences containing key insights or main ideas."""
+        key_indicators = [
+            r'(עיקר|מרכזי|חשוב|בעיקר|בעיקרון)',
+            r'(לכן|לפיכך|כתוצאה|בעקבות)',
+            r'(לסיכום|בסופו של דבר|לבסוף)',
+            r'(הסיבה|הגורם|הבעיה|הפתרון)',
+            r'(מחקר|ממצא|תוצאה|מסקנה)',
+            r'(החלטה|החליט|קבע|קובע)'
+        ]
+        return any(re.search(pattern, sentence, re.IGNORECASE) for pattern in key_indicators)
+    
+    def _is_transition_sentence(self, sentence: str) -> bool:
+        """Detect sentences that provide narrative flow."""
+        transition_patterns = [
+            r'^(עם זאת|אולם|אך|למרות זאת)',
+            r'^(בנוסף|כמו כן|יתר על כן)',
+            r'^(מאידך|מצד שני|לעומת זאת)',
+            r'(באופן כללי|בדרך כלל|למעשה)'
+        ]
+        return any(re.search(pattern, sentence, re.IGNORECASE) for pattern in transition_patterns)
+    
+    def _calculate_redundancy_penalty(self, sentence: str, existing_sentences: List[str]) -> float:
+        """Calculate penalty for redundant content."""
+        if not existing_sentences:
+            return 0.0
+        
+        # Simple word overlap check
+        sentence_words = set(sentence.lower().split())
+        max_overlap = 0
+        
+        for existing in existing_sentences:
+            existing_words = set(existing.lower().split())
+            overlap = len(sentence_words & existing_words) / len(sentence_words | existing_words)
+            max_overlap = max(max_overlap, overlap)
+        
+        return min(max_overlap * 0.5, 0.3)  # Cap penalty at 30%
+    
+    def _select_representative_sentences(self, scored_sentences: List[Tuple[float, str, int]], 
+                                       sections: Dict[str, List[int]], 
+                                       target_ratio: float) -> List[Tuple[float, str, int]]:
+        """Select sentences ensuring representation from all sections."""
+        total_sentences = len(scored_sentences)
+        target_count = max(3, int(total_sentences * target_ratio))
+        
+        # Ensure minimum representation from each section
+        min_opening = max(1, target_count // 4)
+        min_closing = max(1, target_count // 5)
+        min_middle = target_count - min_opening - min_closing
+        
+        selected = []
+        section_counts = {'opening': 0, 'middle': 0, 'closing': 0}
+        
+        # First pass: ensure minimum representation
+        for score, sentence, idx in scored_sentences:
+            current_section = None
+            if idx in sections['opening']:
+                current_section = 'opening'
+            elif idx in sections['middle']:
+                current_section = 'middle'
+            elif idx in sections['closing']:
+                current_section = 'closing'
+            
+            if current_section:
+                min_needed = {'opening': min_opening, 'middle': min_middle, 'closing': min_closing}
+                if section_counts[current_section] < min_needed[current_section]:
+                    selected.append((score, sentence, idx))
+                    section_counts[current_section] += 1
+                    
+                    if len(selected) >= target_count:
+                        break
+        
+        # Second pass: fill remaining slots with highest scores
+        remaining_slots = target_count - len(selected)
+        selected_indices = {s[2] for s in selected}
+        
+        for score, sentence, idx in scored_sentences:
+            if remaining_slots <= 0:
+                break
+            if idx not in selected_indices:
+                selected.append((score, sentence, idx))
+                remaining_slots -= 1
+        
+        return selected
+    
+    def _create_flowing_summary(self, selected_sentences: List[Tuple[float, str, int]], 
+                               all_sentences: List[str]) -> str:
+        """Create a flowing, coherent summary maintaining narrative order."""
+        # Sort by original position to maintain narrative flow
+        ordered_sentences = sorted(selected_sentences, key=lambda x: x[2])
+        
+        # Extract just the sentences
+        summary_sentences = [s[1] for s in ordered_sentences]
+        
+        # Add smooth transitions where needed
+        flowing_sentences = []
+        for i, sentence in enumerate(summary_sentences):
+            # Clean up sentence start if it's a connector without context
+            if i == 0 and any(sentence.startswith(c) for c in self.connectors):
+                # Remove leading connector for first sentence
+                for connector in self.connectors:
+                    if sentence.startswith(connector):
+                        sentence = sentence[len(connector):].strip()
+                        if sentence and sentence[0].islower():
+                            sentence = sentence[0].upper() + sentence[1:]
+                        break
+            
+            flowing_sentences.append(sentence)
+        
+        return ' '.join(flowing_sentences)
+    
+    def _polish_summary_flow(self, summary: str) -> str:
+        """Final polish for summary coherence and readability."""
+        # Remove double spaces
+        summary = re.sub(r'\s+', ' ', summary)
+        
+        # Ensure proper sentence endings
+        summary = re.sub(r'([^.!?])\s*$', r'\1.', summary)
+        
+        # Fix spacing around punctuation
+        summary = re.sub(r'\s+([.!?])', r'\1', summary)
+        
+        return summary.strip()
+    
+    def _create_short_summary(self, text: str, sentences: List[str], start_time: float) -> Dict[str, any]:
+        """Handle short texts that don't need complex summarization."""
+        return {
+            "summary": text,
+            "metadata": {
+                "method": "no_summarization_needed",
+                "original_sentences": len(sentences),
+                "processing_time": time.time() - start_time,
+                "note": "Text too short for comprehensive summarization"
+            }
+        }
+    
+    def extractive_summarize(self, text: str, top_n: int = 6) -> Dict[str, any]:
+        """Main extractive summarization entry point - now uses comprehensive method."""
+        return self.comprehensive_extractive_summarize(text, target_ratio=0.35)
+    
+    def comprehensive_abstractive_summarize(self, text: str, target_ratio: float = 0.3) -> Dict[str, any]:
+        """
+        Comprehensive abstractive summarization following guidelines:
+        - Analyzes entire text from beginning to end
+        - Identifies key points from all sections
+        - Generates flowing, coherent summary in own words
+        - Maintains 25-40% compression ratio
+        """
         start_time = time.time()
         
         try:
             clean_text = self.preprocess_hebrew_text(text)
             
-            # Prepare input for mT5
-            input_text = f"summarize: {clean_text}"
+            # 1. Analyze text structure and extract key points
+            sentences = self.split_sentences(clean_text)
+            if len(sentences) < 3:
+                return self._create_short_summary(clean_text, sentences, start_time)
             
+            # 2. Identify sections and key content
+            sections = self._identify_text_sections(sentences)
+            key_points = self._extract_key_points_from_sections(sentences, sections)
+            
+            # 3. Create structured input for better abstractive generation
+            structured_input = self._create_structured_input(key_points, clean_text)
+            
+            # 4. Calculate target length based on compression ratio
+            target_length = max(50, min(200, int(len(clean_text.split()) * target_ratio)))
+            
+            # 5. Generate summary with enhanced parameters
             inputs = self.abstractive_tokenizer(
-                input_text,
+                structured_input,
                 return_tensors="pt",
                 max_length=512,
                 truncation=True,
@@ -324,31 +529,134 @@ class AIHebrewSummarizer:
                 summary_ids = self.abstractive_model.generate(
                     inputs["input_ids"],
                     attention_mask=inputs["attention_mask"],
-                    max_length=max_length,
-                    min_length=30,
-                    length_penalty=2.0,
-                    num_beams=4,
+                    max_length=target_length,
+                    min_length=max(30, target_length // 3),
+                    length_penalty=1.5,  # Encourage appropriate length
+                    num_beams=6,  # More beams for better quality
                     early_stopping=True,
-                    do_sample=False
+                    do_sample=True,  # Add some creativity
+                    temperature=0.7,  # Controlled randomness
+                    top_p=0.9,  # Nucleus sampling
+                    repetition_penalty=1.2  # Avoid repetition
                 )
             
-            summary = self.abstractive_tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+            raw_summary = self.abstractive_tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+            
+            # 6. Post-process for coherence and flow
+            polished_summary = self._polish_abstractive_summary(raw_summary, key_points)
             
             return {
-                "summary": summary,
+                "summary": polished_summary,
                 "metadata": {
-                    "method": "mt5_abstractive",
+                    "method": "comprehensive_abstractive",
                     "original_length": len(clean_text),
-                    "summary_length": len(summary),
-                    "compression_ratio": len(summary) / len(clean_text),
+                    "summary_length": len(polished_summary),
+                    "compression_ratio": len(polished_summary) / len(clean_text),
+                    "sections_analyzed": {
+                        "opening_points": len(key_points.get('opening', [])),
+                        "middle_points": len(key_points.get('middle', [])),
+                        "closing_points": len(key_points.get('closing', []))
+                    },
                     "processing_time": time.time() - start_time,
-                    "model": "mT5-small"
+                    "model": "mT5-small + Comprehensive Analysis"
                 }
             }
             
         except Exception as e:
-            logger.error(f"Abstractive summarization failed: {e}")
+            logger.error(f"Comprehensive abstractive summarization failed: {e}")
             return self._fallback_summary(text, start_time)
+    
+    def _extract_key_points_from_sections(self, sentences: List[str], 
+                                         sections: Dict[str, List[int]]) -> Dict[str, List[str]]:
+        """Extract key points from each section of the text."""
+        key_points = {'opening': [], 'middle': [], 'closing': []}
+        
+        for section_name, indices in sections.items():
+            section_sentences = [sentences[i] for i in indices]
+            
+            # Score sentences within section
+            if len(section_sentences) > 0:
+                # Simple scoring based on content indicators
+                scored = []
+                for sentence in section_sentences:
+                    score = 0
+                    
+                    # Key content indicators
+                    if self._contains_key_insights(sentence):
+                        score += 2
+                    if re.search(r'\d+', sentence):  # Contains numbers/data
+                        score += 1
+                    if len(sentence.split()) > 10:  # Substantial length
+                        score += 1
+                    if sentence.endswith('?'):  # Questions are often important
+                        score += 1
+                    
+                    scored.append((score, sentence))
+                
+                # Select top sentences from section
+                scored.sort(key=lambda x: x[0], reverse=True)
+                section_limit = max(1, len(section_sentences) // 3)
+                key_points[section_name] = [s[1] for s in scored[:section_limit]]
+        
+        return key_points
+    
+    def _create_structured_input(self, key_points: Dict[str, List[str]], full_text: str) -> str:
+        """Create structured input that guides the model to comprehensive summarization."""
+        # Create a structured prompt that emphasizes comprehensive coverage
+        structured_parts = []
+        
+        # Add instruction for comprehensive summarization
+        structured_parts.append("summarize comprehensively from beginning to end:")
+        
+        # Add key points from each section
+        if key_points['opening']:
+            structured_parts.append("Opening: " + " ".join(key_points['opening'][:2]))
+        
+        if key_points['middle']:
+            structured_parts.append("Main content: " + " ".join(key_points['middle'][:3]))
+        
+        if key_points['closing']:
+            structured_parts.append("Conclusion: " + " ".join(key_points['closing'][:2]))
+        
+        # Combine with truncated full text if space allows
+        structured_input = " ".join(structured_parts)
+        
+        # If input is too long, prioritize the structured parts
+        if len(structured_input.split()) > 400:
+            # Use only the structured key points
+            return structured_input
+        else:
+            # Add some of the full text for context
+            remaining_space = 400 - len(structured_input.split())
+            full_text_words = full_text.split()[:remaining_space]
+            return structured_input + " Full context: " + " ".join(full_text_words)
+    
+    def _polish_abstractive_summary(self, raw_summary: str, key_points: Dict[str, List[str]]) -> str:
+        """Polish the abstractive summary for better flow and coherence."""
+        # Remove any instruction artifacts
+        summary = re.sub(r'^(summarize|summary|תקציר)[:.]?\s*', '', raw_summary, flags=re.IGNORECASE)
+        
+        # Ensure proper capitalization
+        if summary and summary[0].islower():
+            summary = summary[0].upper() + summary[1:]
+        
+        # Clean up spacing and punctuation
+        summary = re.sub(r'\s+', ' ', summary)
+        summary = re.sub(r'\s+([.!?])', r'\1', summary)
+        
+        # Ensure proper ending
+        if summary and not summary.endswith(('.', '!', '?')):
+            summary += '.'
+        
+        return summary.strip()
+    
+    def abstractive_summarize(self, text: str, max_length: int = 150) -> Dict[str, any]:
+        """Main abstractive summarization entry point - now uses comprehensive method."""
+        # Convert max_length to target_ratio for consistency
+        estimated_words = len(text.split())
+        target_ratio = min(0.4, max(0.25, max_length / estimated_words)) if estimated_words > 0 else 0.3
+        
+        return self.comprehensive_abstractive_summarize(text, target_ratio)
     
     def _fallback_summary(self, text: str, start_time: float) -> Dict[str, any]:
         """Fallback to simple extraction if AI fails."""

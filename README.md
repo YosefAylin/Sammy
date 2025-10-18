@@ -23,7 +23,25 @@ Sammy is an AI-powered browser extension that provides intelligent Hebrew text s
 
 ## 🚀 Quick Start (Universal)
 
-### **Option 1: Automatic Setup (Recommended)**
+### **Option 1: Virtual Environment (Recommended)**
+```bash
+git clone <repository-url>
+cd sammy
+
+# Create and activate virtual environment
+python3 -m venv venv
+source venv/bin/activate  # macOS/Linux
+# or venv\Scripts\activate  # Windows
+
+# Install dependencies
+pip install -r backend/requirements.txt
+pip install protobuf sentencepiece
+
+# Start system
+python run_sammy.py  # Auto-activates venv
+```
+
+### **Option 2: Automatic Setup**
 ```bash
 git clone <repository-url>
 cd sammy
@@ -31,7 +49,7 @@ python setup.py
 ```
 *Handles everything automatically on Windows, macOS, and Linux*
 
-### **Option 2: Manual Setup**
+### **Option 3: Manual Setup**
 ```bash
 # 1. Install dependencies
 pip install -r backend/requirements.txt
@@ -79,6 +97,10 @@ sammy/
 │   └── 🤖 mt5-small/             # Multilingual T5 (~1.1GB)
 ├── 🔧 preload_models.py          # AI model downloader
 ├── 🚀 start_sammy.py             # One-command startup
+├── 🐍 run_sammy.py               # Virtual environment wrapper
+├── 📁 venv/                      # Virtual environment (excluded from git)
+├── 🔧 activate_env.sh            # Easy activation script
+├── 📖 VIRTUAL_ENV_GUIDE.md       # Virtual environment documentation
 └── 🧪 test_extension.html        # Testing page
 ```
 
@@ -143,6 +165,15 @@ sammy/
 - `flask` - Web server framework
 - `numpy` - Numerical computations
 - `scikit-learn` - ML utilities
+
+### **Virtual Environment Setup**
+This project uses Python virtual environments for:
+- ✅ **Dependency isolation** - No conflicts with other projects
+- ✅ **Reproducible builds** - Same environment everywhere
+- ✅ **Cross-platform compatibility** - Works on Windows, macOS, Linux
+- ✅ **Easy cleanup** - Delete `venv/` folder to remove everything
+
+See `VIRTUAL_ENV_GUIDE.md` for detailed setup instructions.
 
 ### **Performance**
 - **Memory**: ~2GB with both models loaded
