@@ -1,21 +1,53 @@
-  {
-    "name": "Sammy",
-    "description": "Your summerization master",
-    "version": "1.0",
+{
+    "name": "Sammy - סיכום חכם",
+    "description": "סיכום אוטומטי של טקסט עברי באמצעות בינה מלאכותית מתקדמת",
+    "version": "2.0.0",
     "manifest_version": 3,
-    "permissions": ["activeTab", "scripting"],
-    "host_permissions": ["*://*/*"],
+    "permissions": [
+        "activeTab",
+        "scripting",
+        "storage"
+    ],
+    "host_permissions": [
+        "http://localhost:5002/*"
+    ],
     "background": {
-    "service_worker": "script/background.js"
+        "service_worker": "script/background.js"
     },
     "action": {
-      "default_popup": "index.html",
-      "default_icon": "Resources/Icon.png"
+        "default_popup": "index.html",
+        "default_icon": {
+            "16": "Resources/Icon-16.png",
+            "32": "Resources/Icon-32.png",
+            "48": "Resources/Icon-48.png",
+            "128": "Resources/Icon-128.png"
+        },
+        "default_title": "Sammy - סכם דף זה"
+    },
+    "icons": {
+        "16": "Resources/Icon-16.png",
+        "32": "Resources/Icon-32.png",
+        "48": "Resources/Icon-48.png",
+        "128": "Resources/Icon-128.png"
     },
     "content_scripts": [
-      {
-        "matches": ["<all_urls>"],
-        "js": ["script/content.js"]
-      }
-    ]
-  }
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "js": [
+                "script/content.js"
+            ],
+            "run_at": "document_idle"
+        }
+    ],
+    "commands": {
+        "summarize-page": {
+            "suggested_key": {
+                "default": "Ctrl+Shift+S",
+                "mac": "Command+Shift+S"
+            },
+            "description": "סכם את הדף הנוכחי"
+        }
+    }
+}

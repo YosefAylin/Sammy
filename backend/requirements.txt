@@ -1,0 +1,35 @@
+# Core AI dependencies (REQUIRED)
+torch>=2.0.0
+transformers>=4.30.0
+tokenizers>=0.13.0
+
+# Core computing (REQUIRED)
+numpy>=1.24.0
+scikit-learn>=1.3.0
+networkx>=3.0
+
+# Web framework (REQUIRED)
+flask>=2.3.0
+flask-cors>=4.0.0
+
+# Essential utilities (REQUIRED)
+requests>=2.31.0
+
+# Optional dependencies (install only if needed)
+# Uncomment lines below for specific features:
+
+# For dataset creation:
+# beautifulsoup4>=4.12.0
+# pandas>=2.0.0
+
+# For model training:
+# datasets>=2.14.0
+# rouge-score>=0.1.2
+# accelerate>=0.21.0
+
+# For development:
+# pytest>=7.4.0
+# black>=23.0.0
+# flake8>=6.0.0
+# jupyter>=1.0.0
+# tqdm>=4.65.0

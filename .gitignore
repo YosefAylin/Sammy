@@ -1,0 +1,32 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# AI Models (users download individually)
+models/
+*.bin
+*.safetensors
+
+# Cache directories
+__pycache__/
+*.pyc
+*.pyo
+.cache/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Build directories
+build/
+dist/

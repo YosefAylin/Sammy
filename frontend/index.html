@@ -1,17 +1,54 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Sammy - סיכום חכם</title>
     <link rel="stylesheet" href="./css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Hebrew:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div id="heading-container">
-        <h1>Sammy The Man</h1>
-        <button id="scrape">Sam</button>
+        <h1>Sammy</h1>
+        <div class="controls">
+            <div class="ai-controls">
+                <div class="method-control">
+                    <label for="method-select">שיטת סיכום:</label>
+                    <select id="method-select" class="method-selector">
+                        <option value="extractive">חילוץ חכם (מהיר)</option>
+                        <option value="abstractive">יצירה חדשה (איכותי)</option>
+                    </select>
+                </div>
+                <div class="length-control">
+                    <label for="length-slider">אורך סיכום:</label>
+                    <input type="range" id="length-slider" min="3" max="10" value="6" class="slider">
+                    <span id="length-value">6</span> משפטים
+                </div>
+            </div>
+            <button id="scrape" class="main-button">
+                <span class="button-text">סכם דף</span>
+                <span class="button-icon">📄</span>
+            </button>
+        </div>
     </div>
-    <p id="para"></p>
+    
+    <div id="para" class="content-area">
+        <div class="welcome-message">
+            <p>לחץ על "סכם דף" כדי לקבל סיכום חכם של הדף הנוכחי</p>
+            <div class="features">
+                <div class="feature">⚡ מהיר ויעיל</div>
+                <div class="feature">🧠 מבוסס בינה מלאכותית</div>
+                <div class="feature">🇮🇱 מותאם לעברית</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <div class="version">v2.0</div>
+        <div class="status" id="status-indicator">●</div>
+    </div>
 </body>
-    <script type="text/javascript" src="./script/popup.js"></script>
+<script type="text/javascript" src="./script/popup.js"></script>
 </html>
