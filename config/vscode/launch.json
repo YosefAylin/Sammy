@@ -1,0 +1,38 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Start Sammy AI",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/start_sammy.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "python": "${workspaceFolder}/venv/bin/python",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "AI Server Only",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/backend/ai_server.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "python": "${workspaceFolder}/venv/bin/python",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "Preload Models",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/preload_models.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "python": "${workspaceFolder}/venv/bin/python"
+        }
+    ]
+}

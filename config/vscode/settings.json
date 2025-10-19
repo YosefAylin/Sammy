@@ -1,0 +1,21 @@
+{
+    "kiroAgent.configureMCP": "Disabled",
+    "python.interpreter.path": "./venv/bin/python",
+    "python.defaultInterpreterPath": "./venv/bin/python",
+    "python.terminal.activateEnvironment": true,
+    "python.terminal.activateEnvInCurrentTerminal": true,
+    "python.linting.enabled": true,
+    "python.linting.pylintEnabled": false,
+    "python.linting.flake8Enabled": true,
+    "python.formatting.provider": "black",
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.autoImportCompletions": true,
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/*.pyc": true,
+        "**/venv": true,
+        "**/models": true,
+        "**/*.pdf": true
+    },
+    "python.envFile": "${workspaceFolder}/.env"
+}

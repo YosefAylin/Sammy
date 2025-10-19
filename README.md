@@ -38,14 +38,16 @@ pip install -r backend/requirements.txt
 pip install protobuf sentencepiece
 
 # Start system
-python run_sammy.py  # Auto-activates venv
+python config/scripts/run_sammy.py  # Auto-activates venv
+# or use the wrapper:
+python run_sammy.py
 ```
 
 ### **Option 2: Automatic Setup**
 ```bash
 git clone <repository-url>
 cd sammy
-python setup.py
+python config/scripts/setup.py
 ```
 *Handles everything automatically on Windows, macOS, and Linux*
 
@@ -97,9 +99,15 @@ sammy/
 │   └── 🤖 mt5-small/             # Multilingual T5 (~1.1GB)
 ├── 🔧 preload_models.py          # AI model downloader
 ├── 🚀 start_sammy.py             # One-command startup
-├── 🐍 run_sammy.py               # Virtual environment wrapper
+├── 📁 config/                    # Configuration files
+│   ├── 📋 .env.example           # Environment variables template
+│   ├── 📁 vscode/                # VS Code IDE configuration
+│   └── 📁 scripts/               # Setup and utility scripts
+│       ├── 🐍 run_sammy.py       # Virtual environment wrapper
+│       ├── 🔧 activate_env.sh    # Easy activation script
+│       ├── ⚙️ setup.py           # Project setup script
+│       └── 🚀 deploy.py          # Deployment utilities
 ├── 📁 venv/                      # Virtual environment (excluded from git)
-├── 🔧 activate_env.sh            # Easy activation script
 ├── 📖 VIRTUAL_ENV_GUIDE.md       # Virtual environment documentation
 └── 🧪 test_extension.html        # Testing page
 ```
