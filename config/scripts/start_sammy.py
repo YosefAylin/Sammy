@@ -42,8 +42,8 @@ def preload_models():
         tokenizer = AutoTokenizer.from_pretrained('onlplab/alephbert-base')
         print("✅ AlephBERT model cached")
         
-        tokenizer = AutoTokenizer.from_pretrained('google/mt5-small')
-        print("✅ mT5 model cached")
+        tokenizer = AutoTokenizer.from_pretrained('Dicta-IL/dictalm2.0')
+        print("✅ Dicta Hebrew model cached")
         
         return True
         

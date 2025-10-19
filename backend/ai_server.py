@@ -536,7 +536,7 @@ class AIHebrewSummarizer:
         """
         Hebrew-optimized abstractive summarization:
         - Uses AlephBERT for understanding + intelligent rewriting
-        - Better quality than mT5 for Hebrew text
+        - Uses native Hebrew models for better quality
         - Creates flowing, natural summaries
         """
         start_time = time.time()
@@ -551,7 +551,7 @@ class AIHebrewSummarizer:
             # Use AlephBERT-based intelligent extraction with rewriting
             result = self._hebrew_optimized_abstractive(sentences, target_ratio, start_time)
             
-            # Try improved mT5 with better Hebrew prompting
+            # Try Dicta Hebrew generation for true abstractive summarization
             if len(sentences) >= 3 and len(clean_text) > 200:
                 improved_result = self._improved_mt5_generation(clean_text, target_ratio, start_time)
                 # Use improved generation if it produces reasonable output
@@ -1239,7 +1239,7 @@ def load_models():
 if __name__ == "__main__":
     print("🤖 Starting AI-Powered Sammy Hebrew Summarizer...")
     print("📍 Server running on: http://localhost:5002")
-    print("🧠 Models: AlephBERT + mT5")
+    print("🧠 Models: AlephBERT + Dicta Hebrew LM")
     print("⚡ Methods: Extractive & Abstractive")
     print("⏹️  Press Ctrl+C to stop")
     print("-" * 50)

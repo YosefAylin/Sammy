@@ -11,9 +11,9 @@ Transformed the basic extension into a professional AI-powered system:
 - **Professional Setup**: Virtual environments, automated installation, cross-platform support
 
 ### 🧠 **AI Capabilities Added**
-- **Two AI Models**: AlephBERT (Hebrew BERT) + mT5 (multilingual summarization)
+- **Two AI Models**: AlephBERT (Hebrew understanding) + Dicta Hebrew LM (text generation)
 - **Dual Methods**: Fast extractive vs. smart abstractive summarization
-- **Hebrew Optimization**: Stopwords, connectors, noise filtering
+- **Hebrew Optimization**: Native Hebrew models, stopwords, connectors, noise filtering
 - **Smart Extraction**: Comprehensive text analysis from opening to closing
 
 ### 🎛️ **User Experience Improvements**
@@ -45,7 +45,7 @@ Then:
 
 ### Backend (`backend/ai_server.py`)
 - **AlephBERT Integration**: Hebrew semantic understanding
-- **mT5 Summarization**: Abstractive text generation  
+- **Dicta Hebrew LM**: Native Hebrew text generation for abstractive summaries
 - **Comprehensive Algorithm**: Sectional analysis, key insight detection
 - **Performance Optimization**: Caching, batch processing, fallback systems
 
@@ -63,7 +63,7 @@ Then:
 
 ## What Works Now
 
-✅ **AI-Powered Summarization**: Real Hebrew understanding with AlephBERT + mT5  
+✅ **AI-Powered Summarization**: Real Hebrew understanding with AlephBERT + Dicta Hebrew LM  
 ✅ **Percentage-Based Control**: Intuitive 20-60% summary length slider  
 ✅ **Professional Quality**: Error handling, loading states, proper feedback  
 ✅ **Ultra-Simple Setup**: Two commands only (setup.py + run.py)  
