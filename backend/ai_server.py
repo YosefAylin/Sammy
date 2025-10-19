@@ -82,12 +82,21 @@ class AIHebrewSummarizer:
             self.alephbert_model = AutoModel.from_pretrained(alephbert_path).to(self.device)
             self.alephbert_model.eval()
             
-            logger.info("Loading multilingual summarization model...")
-            # Get mT5 path (download if needed)
-            mt5_path = self.model_manager.get_model_path('mt5')
-            self.abstractive_tokenizer = AutoTokenizer.from_pretrained(mt5_path)
-            self.abstractive_model = AutoModelForSeq2SeqLM.from_pretrained(mt5_path).to(self.device)
+            logger.info("Loading Dicta Hebrew language model...")
+            # Get Dicta path (download if needed)
+            dicta_path = self.model_manager.get_model_path('dicta')
+            
+            from transformers import AutoModelForCausalLM
+            self.abstractive_tokenizer = AutoTokenizer.from_pretrained(dicta_path)
+            self.abstractive_model = AutoModelForCausalLM.from_pretrained(dicta_path).to(self.device)
             self.abstractive_model.eval()
+            
+            # Set pad token if not exists
+            if self.abstractive_tokenizer.pad_token is None:
+                self.abstractive_tokenizer.pad_token = self.abstractive_tokenizer.eos_token
+            
+            self.current_abstractive_model = 'dicta-hebrew'
+            logger.info("✅ Dicta Hebrew model loaded successfully!")
             
             self.models_loaded = True
             logger.info("✅ All AI models loaded successfully!")
@@ -542,12 +551,12 @@ class AIHebrewSummarizer:
             # Use AlephBERT-based intelligent extraction with rewriting
             result = self._hebrew_optimized_abstractive(sentences, target_ratio, start_time)
             
-            # Try mT5 as fallback only for very short texts
-            if len(sentences) <= 5 and len(clean_text) < 500:
-                mT5_result = self._try_mt5_summarization(clean_text, target_ratio, start_time)
-                # Use mT5 only if it produces reasonable output
-                if self._is_reasonable_summary(mT5_result.get("summary", ""), clean_text):
-                    return mT5_result
+            # Try improved mT5 with better Hebrew prompting
+            if len(sentences) >= 3 and len(clean_text) > 200:
+                improved_result = self._improved_mt5_generation(clean_text, target_ratio, start_time)
+                # Use improved generation if it produces reasonable output
+                if self._is_reasonable_summary(improved_result.get("summary", ""), clean_text):
+                    return improved_result
             
             return result
             
@@ -587,39 +596,108 @@ class AIHebrewSummarizer:
     
     def _create_abstractive_style_summary(self, selected_sentences: List[Tuple[float, str, int]], 
                                         all_sentences: List[str]) -> str:
-        """Create abstractive-style summary by intelligent rewriting."""
-        # Extract key information from selected sentences
-        key_info = []
+        """Create abstractive-style summary by intelligent rewriting and paraphrasing."""
+        # Extract and paraphrase key information
+        key_concepts = []
         for score, sentence, idx in selected_sentences:
-            # Extract key phrases and concepts
-            cleaned = self._extract_key_concepts(sentence)
-            if cleaned:
-                key_info.append(cleaned)
+            paraphrased = self._paraphrase_sentence(sentence)
+            if paraphrased and paraphrased != sentence:
+                key_concepts.append(paraphrased)
+            else:
+                # Extract key concepts if paraphrasing fails
+                concepts = self._extract_key_concepts(sentence)
+                if concepts:
+                    key_concepts.append(concepts)
         
-        # Combine and rewrite for flow
-        if len(key_info) >= 2:
-            # Create flowing summary by combining key concepts
-            summary_parts = []
-            
-            # Opening statement
-            if key_info:
-                summary_parts.append(key_info[0])
-            
-            # Main content - combine and connect ideas
-            if len(key_info) > 1:
-                main_content = self._connect_ideas(key_info[1:])
-                if main_content:
-                    summary_parts.append(main_content)
-            
-            summary = ' '.join(summary_parts)
-            
-            # Ensure proper Hebrew flow
-            summary = self._improve_hebrew_flow(summary)
-            
-            return summary
-        else:
-            # Fallback to best sentence if rewriting fails
+        if not key_concepts:
             return selected_sentences[0][1] if selected_sentences else ""
+        
+        # Create new flowing narrative
+        if len(key_concepts) == 1:
+            return self._improve_hebrew_flow(key_concepts[0])
+        
+        # Combine multiple concepts into new sentences
+        combined_summary = self._synthesize_new_summary(key_concepts)
+        
+        return self._improve_hebrew_flow(combined_summary)
+    
+    def _paraphrase_sentence(self, sentence: str) -> str:
+        """Paraphrase a sentence to create abstractive-style content."""
+        # Hebrew paraphrasing patterns
+        paraphrase_patterns = [
+            # Change "זהו X" to "מדובר ב-X"
+            (r'^זהו\s+(.+)', r'מדובר ב\1'),
+            # Change "הוא מכיל" to "כולל"
+            (r'הוא מכיל\s+(.+)', r'כולל \1'),
+            # Change "המטרה היא" to "נועד"
+            (r'המטרה היא\s+(.+)', r'נועד \1'),
+            # Change "צריך לבדוק" to "נבדק"
+            (r'צריך לבדוק\s+(.+)', r'נבדק \1'),
+            # Change "הוא צריך" to "נדרש"
+            (r'הוא צריך\s+(.+)', r'נדרש \1'),
+        ]
+        
+        paraphrased = sentence
+        for pattern, replacement in paraphrase_patterns:
+            paraphrased = re.sub(pattern, replacement, paraphrased, flags=re.IGNORECASE)
+        
+        # If no paraphrasing occurred, try concept extraction
+        if paraphrased == sentence:
+            return self._extract_key_concepts(sentence)
+        
+        return paraphrased
+    
+    def _synthesize_new_summary(self, concepts: List[str]) -> str:
+        """Synthesize new summary from multiple concepts."""
+        if not concepts:
+            return ""
+        
+        if len(concepts) == 1:
+            return concepts[0]
+        
+        # Create new synthetic sentences
+        synthesis_templates = [
+            "המאמר עוסק ב{} ו{}",
+            "הנושא כולל {} בנוסף ל{}",
+            "המחקר מתמקד ב{} תוך התייחסות ל{}",
+            "הדיון נסוב סביב {} ו{}"
+        ]
+        
+        # Try to combine first two concepts
+        if len(concepts) >= 2:
+            concept1 = self._clean_concept_for_synthesis(concepts[0])
+            concept2 = self._clean_concept_for_synthesis(concepts[1])
+            
+            if concept1 and concept2:
+                template = synthesis_templates[0]  # Use first template
+                synthesized = template.format(concept1, concept2)
+                
+                # Add remaining concepts if any
+                if len(concepts) > 2:
+                    remaining = [self._clean_concept_for_synthesis(c) for c in concepts[2:]]
+                    remaining = [c for c in remaining if c]  # Filter empty
+                    if remaining:
+                        synthesized += ". " + "כמו כן, " + ", ".join(remaining[:2])
+                
+                return synthesized
+        
+        # Fallback: just connect with connectors
+        return self._connect_ideas(concepts)
+    
+    def _clean_concept_for_synthesis(self, concept: str) -> str:
+        """Clean concept for use in synthesis templates."""
+        # Remove sentence endings and clean up
+        cleaned = concept.strip('.,!?;:')
+        
+        # Remove common sentence starters
+        starters = ['זהו', 'הוא', 'היא', 'זה', 'המטרה', 'הנושא']
+        words = cleaned.split()
+        
+        if words and words[0] in starters:
+            cleaned = ' '.join(words[1:])
+        
+        # Keep only if substantial
+        return cleaned if len(cleaned) > 10 else ""
     
     def _extract_key_concepts(self, sentence: str) -> str:
         """Extract key concepts from a sentence."""
@@ -674,13 +752,16 @@ class AIHebrewSummarizer:
         
         return text
     
-    def _try_mt5_summarization(self, text: str, target_ratio: float, start_time: float) -> Dict[str, any]:
-        """Try mT5 summarization as fallback for very short texts."""
+    def _improved_mt5_generation(self, text: str, target_ratio: float, start_time: float) -> Dict[str, any]:
+        """Generate summary using Dicta Hebrew language model."""
         try:
-            target_length = max(30, min(100, int(len(text.split()) * target_ratio)))
+            target_length = max(50, min(200, int(len(text.split()) * target_ratio)))
+            
+            # Create Hebrew prompt for Dicta model
+            prompt = f"הטקסט הבא: {text}\n\nסיכום הטקסט:"
             
             inputs = self.abstractive_tokenizer(
-                f"summarize: {text}",
+                prompt,
                 return_tensors="pt",
                 max_length=512,
                 truncation=True,
@@ -691,32 +772,201 @@ class AIHebrewSummarizer:
                 summary_ids = self.abstractive_model.generate(
                     inputs["input_ids"],
                     attention_mask=inputs["attention_mask"],
-                    max_length=target_length,
-                    min_length=20,
-                    length_penalty=2.0,
-                    num_beams=4,
-                    early_stopping=True,
-                    do_sample=False
+                    max_length=inputs["input_ids"].shape[1] + target_length,
+                    min_length=inputs["input_ids"].shape[1] + 30,
+                    temperature=0.7,
+                    do_sample=True,
+                    top_p=0.9,
+                    repetition_penalty=1.2,
+                    pad_token_id=self.abstractive_tokenizer.pad_token_id,
+                    eos_token_id=self.abstractive_tokenizer.eos_token_id
                 )
             
-            summary = self.abstractive_tokenizer.decode(summary_ids[0], skip_special_tokens=True)
-            summary = self._clean_mt5_output(summary)
+            # Extract only the generated part (after the prompt)
+            generated_text = self.abstractive_tokenizer.decode(
+                summary_ids[0][inputs["input_ids"].shape[1]:], 
+                skip_special_tokens=True
+            )
+            
+            summary = self._clean_dicta_output(generated_text)
             
             return {
                 "summary": summary,
                 "metadata": {
-                    "method": "mt5_fallback",
+                    "method": "dicta_hebrew_generation",
                     "original_length": len(text),
                     "summary_length": len(summary),
                     "compression_ratio": len(summary) / len(text),
                     "processing_time": time.time() - start_time,
-                    "model": "mT5-small (fallback)"
+                    "model": "Dicta Hebrew LM 2.0"
                 }
             }
             
         except Exception as e:
-            logger.error(f"mT5 fallback failed: {e}")
+            logger.error(f"Dicta generation failed: {e}")
             return self._fallback_summary(text, start_time)
+    
+    def _generate_with_gpt_model(self, text: str, target_length: int, start_time: float) -> Dict[str, any]:
+        """Generate summary using Hebrew GPT model."""
+        prompt = f"סכם את הטקסט הבא בקצרה:\n{text}\nסיכום:"
+        
+        inputs = self.abstractive_tokenizer(
+            prompt,
+            return_tensors="pt",
+            max_length=512,
+            truncation=True,
+            padding=True
+        ).to(self.device)
+        
+        with torch.no_grad():
+            summary_ids = self.abstractive_model.generate(
+                inputs["input_ids"],
+                attention_mask=inputs["attention_mask"],
+                max_length=inputs["input_ids"].shape[1] + target_length,
+                min_length=inputs["input_ids"].shape[1] + 20,
+                temperature=0.7,
+                do_sample=True,
+                top_p=0.9,
+                repetition_penalty=1.2,
+                pad_token_id=self.abstractive_tokenizer.eos_token_id
+            )
+        
+        # Extract only the generated part (after the prompt)
+        generated_text = self.abstractive_tokenizer.decode(
+            summary_ids[0][inputs["input_ids"].shape[1]:], 
+            skip_special_tokens=True
+        )
+        
+        summary = self._clean_gpt_output(generated_text)
+        
+        return {
+            "summary": summary,
+            "metadata": {
+                "method": "hebrew_gpt_generation",
+                "original_length": len(text),
+                "summary_length": len(summary),
+                "compression_ratio": len(summary) / len(text),
+                "processing_time": time.time() - start_time,
+                "model": getattr(self, 'current_abstractive_model', 'Hebrew-GPT')
+            }
+        }
+    
+    def _generate_with_dicta_model(self, text: str, target_length: int, start_time: float) -> Dict[str, any]:
+        """Generate summary using Dicta Hebrew model."""
+        prompt = f"הטקסט: {text}\nסיכום הטקסט:"
+        
+        inputs = self.abstractive_tokenizer(
+            prompt,
+            return_tensors="pt",
+            max_length=512,
+            truncation=True,
+            padding=True
+        ).to(self.device)
+        
+        with torch.no_grad():
+            summary_ids = self.abstractive_model.generate(
+                inputs["input_ids"],
+                attention_mask=inputs["attention_mask"],
+                max_length=inputs["input_ids"].shape[1] + target_length,
+                min_length=inputs["input_ids"].shape[1] + 15,
+                temperature=0.6,
+                do_sample=True,
+                top_p=0.85,
+                repetition_penalty=1.3
+            )
+        
+        generated_text = self.abstractive_tokenizer.decode(
+            summary_ids[0][inputs["input_ids"].shape[1]:], 
+            skip_special_tokens=True
+        )
+        
+        summary = self._clean_dicta_output(generated_text)
+        
+        return {
+            "summary": summary,
+            "metadata": {
+                "method": "dicta_hebrew_generation",
+                "original_length": len(text),
+                "summary_length": len(summary),
+                "compression_ratio": len(summary) / len(text),
+                "processing_time": time.time() - start_time,
+                "model": "Dicta Hebrew LM"
+            }
+        }
+    
+    def _generate_with_seq2seq_model(self, text: str, target_length: int, start_time: float) -> Dict[str, any]:
+        """Generate summary using seq2seq model (mT5 style)."""
+        inputs = self.abstractive_tokenizer(
+            f"summarize: {text}",
+            return_tensors="pt",
+            max_length=512,
+            truncation=True,
+            padding=True
+        ).to(self.device)
+        
+        with torch.no_grad():
+            summary_ids = self.abstractive_model.generate(
+                inputs["input_ids"],
+                attention_mask=inputs["attention_mask"],
+                max_length=target_length,
+                min_length=20,
+                length_penalty=2.0,
+                num_beams=4,
+                early_stopping=True,
+                do_sample=False
+            )
+        
+        summary = self.abstractive_tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+        summary = self._clean_mt5_output(summary)
+        
+        return {
+            "summary": summary,
+            "metadata": {
+                "method": "seq2seq_generation",
+                "original_length": len(text),
+                "summary_length": len(summary),
+                "compression_ratio": len(summary) / len(text),
+                "processing_time": time.time() - start_time,
+                "model": getattr(self, 'current_abstractive_model', 'Seq2Seq')
+            }
+        }
+    
+    def _clean_gpt_output(self, text: str) -> str:
+        """Clean GPT model output."""
+        # Remove common artifacts
+        text = text.strip()
+        
+        # Remove prompt remnants
+        if text.startswith('סיכום:'):
+            text = text[5:].strip()
+        
+        # Clean up
+        text = re.sub(r'\n+', ' ', text)
+        text = re.sub(r'\s+', ' ', text)
+        
+        # Ensure proper ending
+        if text and not text.endswith(('.', '!', '?')):
+            text += '.'
+        
+        return text
+    
+    def _clean_dicta_output(self, text: str) -> str:
+        """Clean Dicta model output."""
+        text = text.strip()
+        
+        # Remove prompt remnants
+        if text.startswith('סיכום הטקסט:'):
+            text = text[12:].strip()
+        
+        # Clean up
+        text = re.sub(r'\n+', ' ', text)
+        text = re.sub(r'\s+', ' ', text)
+        
+        # Ensure proper ending
+        if text and not text.endswith(('.', '!', '?')):
+            text += '.'
+        
+        return text
     
     def _clean_mt5_output(self, summary: str) -> str:
         """Clean mT5 output artifacts."""

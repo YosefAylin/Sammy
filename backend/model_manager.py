@@ -27,10 +27,10 @@ class ModelManager:
                 'local_path': self.models_dir / 'alephbert-base',
                 'type': 'encoder'
             },
-            'mt5': {
-                'name': 'google/mt5-small',
-                'local_path': self.models_dir / 'mt5-small',
-                'type': 'seq2seq'
+            'dicta': {
+                'name': 'Dicta-IL/dictalm2.0',
+                'local_path': self.models_dir / 'dicta-hebrew',
+                'type': 'causal'
             }
         }
     
@@ -59,6 +59,9 @@ class ModelManager:
                 model = AutoModel.from_pretrained(config['name'])
             elif config['type'] == 'seq2seq':
                 model = AutoModelForSeq2SeqLM.from_pretrained(config['name'])
+            elif config['type'] == 'causal':
+                from transformers import AutoModelForCausalLM
+                model = AutoModelForCausalLM.from_pretrained(config['name'])
             else:
                 raise ValueError(f"Unknown model type: {config['type']}")
             
