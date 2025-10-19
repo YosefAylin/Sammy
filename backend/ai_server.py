@@ -491,19 +491,37 @@ class AIHebrewSummarizer:
     
     def extractive_summarize(self, text: str, top_n: int = 6) -> Dict[str, any]:
         """Main extractive summarization entry point - now uses comprehensive method."""
-        # Convert top_n to target_ratio based on estimated sentence count
-        sentences = self.split_sentences(self.preprocess_hebrew_text(text))
-        if len(sentences) > 0:
-            # Be more responsive to user's top_n preference
-            target_ratio = min(0.8, max(0.15, top_n / len(sentences)))
-            # Ensure we don't go below user's request if text is short
-            if len(sentences) <= top_n:
-                target_ratio = 1.0
-        else:
-            target_ratio = 0.35
+        start_time = time.time()
         
-        logger.info(f"Extractive: sentences={len(sentences)}, top_n={top_n}, target_ratio={target_ratio:.2f}")
-        return self.comprehensive_extractive_summarize(text, target_ratio)
+        try:
+            # Preprocess and split
+            clean_text = self.preprocess_hebrew_text(text)
+            sentences = self.split_sentences(clean_text)
+            
+            logger.info(f"Extractive request: top_n={top_n}, total_sentences={len(sentences)}")
+            
+            if len(sentences) < 3:
+                return {
+                    "summary": clean_text,
+                    "metadata": {
+                        "method": "no_summarization_needed",
+                        "original_sentences": len(sentences),
+                        "processing_time": time.time() - start_time
+                    }
+                }
+            
+            # For small requests or short texts, use simple selection
+            if top_n <= 3 or len(sentences) <= top_n + 2:
+                return self._simple_extractive_summarize(sentences, top_n, start_time)
+            
+            # For larger requests, use comprehensive method
+            target_ratio = min(0.8, max(0.15, top_n / len(sentences)))
+            logger.info(f"Using comprehensive method: target_ratio={target_ratio:.2f}")
+            return self.comprehensive_extractive_summarize(text, target_ratio)
+            
+        except Exception as e:
+            logger.error(f"Extractive summarization failed: {e}")
+            return self._fallback_summary(text, start_time)
     
     def comprehensive_abstractive_summarize(self, text: str, target_ratio: float = 0.3) -> Dict[str, any]:
         """
@@ -679,6 +697,41 @@ class AIHebrewSummarizer:
             target_ratio = 0.3
         
         return self.comprehensive_abstractive_summarize(text, target_ratio)
+    
+    def _simple_extractive_summarize(self, sentences: List[str], top_n: int, start_time: float) -> Dict[str, any]:
+        """Simple extractive summarization that directly respects top_n."""
+        try:
+            # Get embeddings
+            embeddings = self.get_sentence_embeddings(tuple(sentences))
+            
+            # Score sentences using the existing method
+            scored_sentences = self.calculate_sentence_scores(sentences, embeddings)
+            
+            # Select exactly top_n sentences
+            selected = scored_sentences[:top_n]
+            
+            # Order by original position
+            selected.sort(key=lambda x: x[2])
+            
+            # Create summary
+            summary_sentences = [s[1] for s in selected]
+            summary = ' '.join(summary_sentences)
+            
+            return {
+                "summary": summary,
+                "metadata": {
+                    "method": "simple_extractive",
+                    "original_sentences": len(sentences),
+                    "summary_sentences": len(selected),
+                    "compression_ratio": len(selected) / len(sentences),
+                    "processing_time": time.time() - start_time,
+                    "model": "AlephBERT + Simple Selection"
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Simple extractive failed: {e}")
+            return self._fallback_summary(' '.join(sentences), start_time)
     
     def _fallback_summary(self, text: str, start_time: float) -> Dict[str, any]:
         """Fallback to simple extraction if AI fails."""
