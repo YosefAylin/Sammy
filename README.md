@@ -1,256 +1,165 @@
-# 🤖 Sammy - AI-Powered Hebrew Summarizer
+# 🤖 Sammy - Hebrew Text Summarizer
 
-**Advanced Chrome extension for Hebrew text summarization using AlephBERT and mT5 models**
+**Chrome extension that uses AI to summarize Hebrew websites**
 
-## 🎯 Project Overview
+## What is Sammy?
 
-Sammy is an AI-powered browser extension that provides intelligent Hebrew text summarization using state-of-the-art NLP models. It offers both extractive and abstractive summarization methods optimized for Hebrew content.
+Sammy is a Chrome browser extension that can read Hebrew websites and create smart summaries. Just click one button and get the main points of any Hebrew article!
 
-## 🧠 AI Models Used
+## What I Built
 
-- **AlephBERT**: Hebrew-specific BERT model for semantic understanding (~500MB)
-- **mT5**: Multilingual T5 for abstractive text generation (~1.2GB)
+### 🧠 **AI Brain (Backend)**
+- **Smart AI Server** that understands Hebrew text
+- **Two AI Models**: 
+  - AlephBERT (understands Hebrew) 
+  - mT5 (creates summaries)
+- **Two Summary Types**:
+  - **Fast**: Picks the best sentences from the original text
+  - **Smart**: Creates new summary text in its own words
 
-## 🌍 Cross-Platform Support
+### 🎨 **Chrome Extension (Frontend)**
+- **Simple Interface** with Hebrew support
+- **Slider** to choose how many sentences you want (3-10)
+- **Method Selector** to pick fast or smart summarization
+- **One-Click Operation** - just press "סכם דף" (Summarize Page)
 
-| Platform | Status | Python | Chrome |
-|----------|--------|--------|--------|
-| **Windows 10/11** | ✅ Fully Supported | 3.8+ | ✅ |
-| **macOS** | ✅ Fully Supported | 3.8+ | ✅ |
-| **Linux** | ✅ Fully Supported | 3.8+ | ✅ |
+### 🔧 **Easy Setup System**
+- **Virtual Environment** keeps everything organized
+- **Automatic Installation** downloads AI models
+- **Cross-Platform** works on Windows, Mac, and Linux
 
-*See `CROSS_PLATFORM_GUIDE.md` for detailed compatibility info*
+## How to Run Sammy on Your Computer
 
-## 🚀 Quick Start (Universal)
-
-### **Option 1: Virtual Environment (Recommended)**
+### Step 1: Get the Code
 ```bash
-git clone <repository-url>
-cd sammy
+git clone https://github.com/YosefAylin/Sammy.git
+cd Sammy
+```
 
-# Create and activate virtual environment
+### Step 2: Set Up Python Environment
+```bash
+# Create isolated environment
 python3 -m venv venv
-source venv/bin/activate  # macOS/Linux
-# or venv\Scripts\activate  # Windows
 
-# Install dependencies
+# Activate it
+source venv/bin/activate          # Mac/Linux
+# OR
+venv\Scripts\activate            # Windows
+
+# Install requirements
 pip install -r backend/requirements.txt
 pip install protobuf sentencepiece
-
-# Start system
-python config/scripts/run_sammy.py  # Auto-activates venv
-# or use the wrapper:
-python run_sammy.py
 ```
 
-### **Option 2: Automatic Setup**
+### Step 3: Download AI Models (~1.6GB)
 ```bash
-git clone <repository-url>
-cd sammy
-python config/scripts/setup.py
-```
-*Handles everything automatically on Windows, macOS, and Linux*
-
-### **Option 3: Manual Setup**
-```bash
-# 1. Install dependencies
-pip install -r backend/requirements.txt
-pip install protobuf sentencepiece
-
-# 2. Download AI models (~1.6GB)
 python preload_models.py
+```
+*This downloads the Hebrew AI models. Takes 5-10 minutes depending on internet speed.*
 
-# 3. Start system
+### Step 4: Start the AI Server
+```bash
 python start_sammy.py
 ```
+*Keep this running! You should see "Server running on: http://localhost:5002"*
 
-### **Option 3: Step by Step**
-```bash
-python preload_models.py    # Download models
-python backend/ai_server.py # Start AI server
+### Step 5: Install Chrome Extension
+1. Open Chrome browser
+2. Go to `chrome://extensions/`
+3. Turn on "Developer mode" (top right toggle)
+4. Click "Load unpacked"
+5. Select the `frontend` folder from this project
+6. Done! You'll see Sammy icon in your toolbar
+
+## How to Use Sammy
+
+1. **Go to any Hebrew website** (like Ynet, Haaretz, etc.)
+2. **Click the Sammy icon** in your Chrome toolbar
+3. **Choose your settings**:
+   - Move slider for summary length (3-10 sentences)
+   - Pick method: "חילוץ חכם" (fast) or "יצירה חדשה" (smart)
+4. **Click "סכם דף"** (Summarize Page)
+5. **Get your summary!** Copy it or try different settings
+
+## Project Structure (What Each Folder Does)
+
+```
+Sammy/
+├── backend/              # AI server and models
+│   ├── ai_server.py     # Main AI brain
+│   ├── requirements.txt # What Python packages we need
+│   └── model_manager.py # Downloads and manages AI models
+├── frontend/            # Chrome extension
+│   ├── index.html      # Extension popup window
+│   ├── script/         # JavaScript code
+│   └── css/           # Styling
+├── config/             # Configuration files
+├── models/            # AI models (downloaded automatically)
+└── venv/             # Python environment (created by you)
 ```
 
-### 4. Install Chrome Extension
-1. Open `chrome://extensions/`
-2. Enable Developer mode
-3. Click "Load unpacked"
-4. Select the `frontend` folder
+## Troubleshooting
 
-## 📁 Project Structure
+### "Server not responding" error
+- Make sure `python start_sammy.py` is running
+- Check that you see "Server running on: http://localhost:5002"
 
-```
-sammy/
-├── 📁 backend/
-│   ├── 🤖 ai_server.py           # Main AI server (CORE)
-│   ├── 🔧 model_manager.py       # AI model management
-│   ├── 📊 create_hebrew_dataset.py # Dataset creation tools
-│   ├── 🎓 train_custom_model.py   # Model training utilities
-│   └── 📋 requirements.txt        # Python dependencies
-├── 📁 frontend/
-│   ├── 🎨 css/style.css          # Modern Hebrew UI
-│   ├── 📁 script/
-│   │   ├── 🖱️ popup.js           # Extension popup logic
-│   │   ├── 📄 content.js         # Web page content extraction
-│   │   └── ⚙️ background.js      # Extension background service
-│   ├── 🏠 index.html             # Extension popup interface
-│   └── 📋 manifest.json          # Chrome extension configuration
-├── 📁 models/                    # AI models (downloaded locally)
-│   ├── 🧠 alephbert-base/        # Hebrew BERT (~500MB)
-│   └── 🤖 mt5-small/             # Multilingual T5 (~1.1GB)
-├── 🔧 preload_models.py          # AI model downloader
-├── 🚀 start_sammy.py             # One-command startup
-├── 📁 config/                    # Configuration files
-│   ├── 📋 .env.example           # Environment variables template
-│   ├── 📁 vscode/                # VS Code IDE configuration
-│   └── 📁 scripts/               # Setup and utility scripts
-│       ├── 🐍 run_sammy.py       # Virtual environment wrapper
-│       ├── 🔧 activate_env.sh    # Easy activation script
-│       ├── ⚙️ setup.py           # Project setup script
-│       └── 🚀 deploy.py          # Deployment utilities
-├── 📁 venv/                      # Virtual environment (excluded from git)
-├── 📖 VIRTUAL_ENV_GUIDE.md       # Virtual environment documentation
-└── 🧪 test_extension.html        # Testing page
-```
+### "Missing packages" error
+- Make sure virtual environment is activated: `source venv/bin/activate`
+- Reinstall requirements: `pip install -r backend/requirements.txt`
 
-## 📊 File Classification
+### Extension not working
+- Reload the extension: Chrome → Extensions → Find Sammy → Click reload
+- Make sure you selected the `frontend` folder, not the whole project
 
-### 🔴 **CORE FILES (Essential)**
-| File | Purpose | Size | Critical |
-|------|---------|------|----------|
-| `backend/ai_server.py` | Main AI server with AlephBERT + mT5 | ~400 lines | ✅ YES |
-| `frontend/script/popup.js` | Extension UI logic | ~200 lines | ✅ YES |
-| `frontend/manifest.json` | Chrome extension config | ~50 lines | ✅ YES |
-| `frontend/index.html` | Extension interface | ~80 lines | ✅ YES |
-| `frontend/css/style.css` | Hebrew-optimized styling | ~300 lines | ✅ YES |
-| `backend/requirements.txt` | Python dependencies | ~20 lines | ✅ YES |
+### Models not downloading
+- Check internet connection
+- Try running `python preload_models.py` again
+- Models are ~1.6GB total, so it takes time
 
-### 🟡 **UTILITY FILES (Helpful)**
-| File | Purpose | Expandable | Keep? |
-|------|---------|------------|-------|
-| `preload_models.py` | Downloads AI models | ✅ Yes | 🟡 Useful |
-| `generate_icons.py` | Creates extension icons | ✅ Yes | 🟡 Useful |
-| `test_extension.html` | Testing Hebrew content | ✅ Yes | 🟡 Useful |
+## What Makes This Special
 
-### 🟢 **DEVELOPMENT FILES (Optional)**
-| File | Purpose | Expandable | Keep? |
-|------|---------|------------|-------|
-| `backend/create_hebrew_dataset.py` | Dataset creation tools | ✅ Yes | 🟢 Optional |
-| `backend/train_custom_model.py` | Model training utilities | ✅ Yes | 🟢 Optional |
-| `frontend/script/content.js` | Web scraping logic | ✅ Yes | 🟢 Keep |
-| `frontend/script/background.js` | Extension background | ✅ Yes | 🟢 Keep |
+### 🎯 **Smart Hebrew Processing**
+- Understands Hebrew grammar and sentence structure
+- Removes ads and noise from websites
+- Keeps the most important information
 
-## 🎯 Core Functionality
+### ⚡ **Two Speed Options**
+- **Fast Mode**: Picks best sentences (100ms)
+- **Smart Mode**: Creates new summary (2-3 seconds)
 
-### **AI Server (`backend/ai_server.py`)**
-- **Purpose**: Main AI processing engine
-- **Models**: AlephBERT for understanding + mT5 for generation
-- **Methods**: 
-  - Extractive: Selects important sentences using AI embeddings
-  - Abstractive: Generates new summary text
-- **Features**: Caching, batch processing, Hebrew optimization
+### 🎛️ **User Control**
+- Choose exactly how many sentences you want
+- Switch between different AI methods
+- Works on any Hebrew website
 
-### **Extension Frontend**
-- **Popup**: Modern Hebrew interface with method selection
-- **Content Script**: Intelligent Hebrew text extraction
-- **Background**: Extension lifecycle management
+### 🔧 **Professional Setup**
+- Virtual environment keeps everything clean
+- Easy installation process
+- Works on Windows, Mac, and Linux
 
-### **AI Methods**
-1. **Extractive (AlephBERT + TextRank)**:
-   - Uses semantic embeddings for sentence scoring
-   - Fast processing (~100ms)
-   - High accuracy for Hebrew
+## For Developers
 
-2. **Abstractive (mT5)**:
-   - Generates new summary text
-   - Slower processing (~2s)
-   - More natural language output
+### Key Files to Understand
+- `backend/ai_server.py` - Main AI logic
+- `frontend/script/popup.js` - Extension interface
+- `frontend/script/content.js` - Extracts text from websites
+- `start_sammy.py` - Starts everything
 
-## 🔧 Technical Details
+### How It Works
+1. Extension extracts text from Hebrew website
+2. Sends text to AI server (localhost:5002)
+3. AI server processes with AlephBERT + mT5 models
+4. Returns summary to extension
+5. User sees summary in popup
 
-### **Dependencies**
-- `torch` - PyTorch for AI models
-- `transformers` - Hugging Face model library
-- `flask` - Web server framework
-- `numpy` - Numerical computations
-- `scikit-learn` - ML utilities
-
-### **Virtual Environment Setup**
-This project uses Python virtual environments for:
-- ✅ **Dependency isolation** - No conflicts with other projects
-- ✅ **Reproducible builds** - Same environment everywhere
-- ✅ **Cross-platform compatibility** - Works on Windows, macOS, Linux
-- ✅ **Easy cleanup** - Delete `venv/` folder to remove everything
-
-See `VIRTUAL_ENV_GUIDE.md` for detailed setup instructions.
-
-### **Performance**
-- **Memory**: ~2GB with both models loaded
-- **Processing**: 100ms (extractive) / 2s (abstractive)
-- **Models**: Cached after first load
-- **Accuracy**: Optimized for Hebrew text patterns
-
-## 🎨 Customization Options
-
-### **Expandable Components**
-1. **Add More Models**: Integrate Hebrew-specific models
-2. **Enhanced UI**: Add more summarization options
-3. **Better Training**: Fine-tune on Hebrew datasets
-4. **Performance**: Add GPU acceleration
-5. **Features**: Add translation, sentiment analysis
-
-### **Configuration**
-- Summary length: 3-10 sentences
-- Processing method: Extractive vs Abstractive
-- Model selection: Can switch between different AI models
-- Hebrew optimization: Stopwords, connectors, linguistic rules
-
-## 🚀 Production Ready
-
-This implementation is production-ready with:
-- ✅ Error handling and fallbacks
-- ✅ Efficient caching and memory management
-- ✅ Modern UI with Hebrew support
-- ✅ Cross-browser compatibility
-- ✅ Scalable architecture
-
-## � FGit-Friendly Distribution
-
-### **Why Models Aren't in Git**
-- AI models are **~1.6GB total** (too large for Git)
-- Each user downloads models individually to `./models/`
-- Models are in `.gitignore` to keep repository lightweight
-
-### **For Developers**
-```bash
-git clone <repository>
-cd sammy
-python3 preload_models.py  # Download models locally
-python3 start_sammy.py     # Start the system
-```
-
-### **Repository Size**
-- **Without models**: ~50MB (code only)
-- **With models**: ~1.6GB (after download)
-- **Git repository**: Stays lightweight for easy cloning
-
-## 🔧 Production Features
-
-- **Environment Configuration**: Configurable via environment variables
-- **Performance Monitoring**: Built-in metrics and health checks
-- **Error Handling**: Comprehensive error recovery and user feedback
-- **Docker Support**: Containerized deployment ready
-- **Optimized Dependencies**: Minimal production requirements
-- **Health Monitoring**: Real-time server status in extension
-
-## 📈 Future Enhancements
-
-1. **Model Fine-tuning**: Train on Hebrew news datasets
-2. **Performance**: GPU acceleration, model quantization  
-3. **Features**: Multi-document summarization, key phrase extraction
-4. **UI**: Dark mode, accessibility improvements
-5. **Integration**: API for other applications
-6. **Analytics**: Usage statistics and performance metrics
+### Technologies Used
+- **Python**: AI server and models
+- **JavaScript**: Chrome extension
+- **PyTorch**: AI model framework
+- **Transformers**: Hugging Face AI library
+- **Flask**: Web server for AI API
 
 ---
 
-**Built with ❤️ for Hebrew NLP**
+**Built by Yosef for Hebrew NLP** 🇮🇱
