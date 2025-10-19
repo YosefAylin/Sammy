@@ -768,19 +768,29 @@ def summarize_api():
         if not text:
             return jsonify({"error": "Empty text provided"}), 400
         
-        # Parameters
+        # Parameters - support both old (top_n) and new (target_ratio) formats
         method = data.get("method", "extractive")  # "extractive" or "abstractive"
-        top_n = data.get("top_n", 6)
-        max_length = data.get("max_length", 150)
+        
+        # Handle percentage-based input (new format)
+        if "target_ratio" in data:
+            target_ratio = float(data.get("target_ratio", 0.35))
+            max_length = data.get("max_length", 150)
+        else:
+            # Backward compatibility with sentence-based input (old format)
+            top_n = data.get("top_n", 6)
+            max_length = data.get("max_length", 150)
+            # Convert top_n to target_ratio for internal use
+            sentences = ai_summarizer.split_sentences(ai_summarizer.preprocess_hebrew_text(text))
+            target_ratio = min(0.8, max(0.15, top_n / len(sentences))) if len(sentences) > 0 else 0.35
         
         # Log parameters for debugging
-        logger.info(f"Summarization request: method={method}, top_n={top_n}, max_length={max_length}, text_length={len(text)}")
+        logger.info(f"Summarization request: method={method}, target_ratio={target_ratio:.2f}, max_length={max_length}, text_length={len(text)}")
         
         # Choose summarization method
         if method == "abstractive":
-            result = ai_summarizer.abstractive_summarize(text, max_length)
+            result = ai_summarizer.comprehensive_abstractive_summarize(text, target_ratio)
         else:
-            result = ai_summarizer.extractive_summarize(text, top_n)
+            result = ai_summarizer.comprehensive_extractive_summarize(text, target_ratio)
         
         return jsonify(result)
         

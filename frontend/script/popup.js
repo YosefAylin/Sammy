@@ -40,7 +40,7 @@ class SummaryUI {
     
     loadSettings() {
         chrome.storage.local.get(['summaryLength', 'summaryMethod'], (result) => {
-            const length = result.summaryLength || 6;
+            const length = result.summaryLength || 35; // Default to 35%
             const method = result.summaryMethod || 'extractive';
             
             if (this.lengthSlider) {
@@ -205,7 +205,7 @@ class SummaryUI {
     }
     
     async requestSummary(text) {
-        const summaryLength = this.lengthSlider ? parseInt(this.lengthSlider.value) : 6;
+        const summaryPercentage = this.lengthSlider ? parseInt(this.lengthSlider.value) : 35;
         const method = this.methodSelect ? this.methodSelect.value : 'extractive';
         const startTime = performance.now();
         
@@ -213,8 +213,8 @@ class SummaryUI {
             const payload = { 
                 text: text,
                 method: method,
-                top_n: summaryLength,
-                max_length: summaryLength * 25  // Approximate for abstractive
+                target_ratio: summaryPercentage / 100,  // Convert percentage to ratio
+                max_length: Math.round(text.length * (summaryPercentage / 100) * 0.8)  // Estimate for abstractive
             };
             
             const response = await fetch("http://localhost:5002/summarize", {
