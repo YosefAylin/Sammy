@@ -2,6 +2,16 @@
 
 **Chrome extension that uses AI to summarize Hebrew websites**
 
+## 🚀 Quick Start
+
+```bash
+git clone https://github.com/YosefAylin/Sammy.git
+cd Sammy
+python config/scripts/setup.py
+```
+
+Then install the Chrome extension from the `frontend` folder. That's it!
+
 ## What is Sammy?
 
 Sammy is a Chrome browser extension that can read Hebrew websites and create smart summaries. Just click one button and get the main points of any Hebrew article!
@@ -30,40 +40,36 @@ Sammy is a Chrome browser extension that can read Hebrew websites and create sma
 
 ## How to Run Sammy on Your Computer
 
-### Step 1: Get the Code
+### 🚀 **Automatic Setup**
+
 ```bash
+# 1. Get the code
 git clone https://github.com/YosefAylin/Sammy.git
 cd Sammy
+
+# 2. Run the setup script (does everything automatically!)
+python config/scripts/setup.py
 ```
 
-### Step 2: Set Up Python Environment
+**That's it!** The setup script will:
+- ✅ Check your system compatibility
+- ✅ Create virtual environment
+- ✅ Install all Python packages
+- ✅ Download AI models (~1.6GB)
+- ✅ Test everything works
+- ✅ Show you next steps
+
+### 🎯 **Start Sammy**
 ```bash
-# Create isolated environment
-python3 -m venv venv
+# Option 1: Auto-activate virtual environment
+python config/scripts/run_sammy.py
 
-# Activate it
-source venv/bin/activate          # Mac/Linux
-# OR
-venv\Scripts\activate            # Windows
-
-# Install requirements
-pip install -r backend/requirements.txt
-pip install protobuf sentencepiece
-```
-
-### Step 3: Download AI Models (~1.6GB)
-```bash
-python preload_models.py
-```
-*This downloads the Hebrew AI models. Takes 5-10 minutes depending on internet speed.*
-
-### Step 4: Start the AI Server
-```bash
+# Option 2: Manual (if venv already active)
 python start_sammy.py
 ```
 *Keep this running! You should see "Server running on: http://localhost:5002"*
 
-### Step 5: Install Chrome Extension
+### 📱 **Install Chrome Extension**
 1. Open Chrome browser
 2. Go to `chrome://extensions/`
 3. Turn on "Developer mode" (top right toggle)
