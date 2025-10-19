@@ -139,15 +139,32 @@ class SummaryUI {
     async handleScrape() {
         this.showLoading();
         
+        // Set a timeout for the entire operation
+        const timeoutId = setTimeout(() => {
+            this.showError("הפעולה נמשכת יותר מדי זמן - נסה שוב");
+        }, 30000); // 30 second timeout
+        
         try {
             const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+            
+            // Execute content script
             await chrome.scripting.executeScript({
                 target: { tabId: tabs[0].id },
                 files: ["script/content.js"]
             });
+            
+            // Clear timeout if successful
+            clearTimeout(timeoutId);
+            
         } catch (error) {
+            clearTimeout(timeoutId);
             console.error("Failed to execute content script:", error);
-            this.showError("לא ניתן לגשת לדף זה");
+            
+            if (error.message.includes('Cannot access')) {
+                this.showError("לא ניתן לגשת לדף זה (דף מוגן או פנימי)");
+            } else {
+                this.showError("שגיאה בטעינת הדף - נסה לרענן ולנסות שוב");
+            }
         }
     }
     
@@ -161,19 +178,30 @@ class SummaryUI {
             }
             
             await this.requestSummary(filteredText);
+        } else if (message.type === "EXTRACTION_ERROR") {
+            console.error("Content extraction failed:", message.error);
+            this.showError("שגיאה בחילוץ הטקסט מהדף");
         }
     }
     
     processScrapedData(data) {
-        // Enhanced text processing
-        const minLength = 75;
-        const processedText = data
-            .filter(text => text.length > minLength)
-            .map(text => text.trim())
-            .filter(text => text.length > minLength)
-            .join('\n');
-            
-        return processedText || null;
+        // Handle both array and string data
+        if (typeof data === 'string') {
+            return data.length > 100 ? data : null;
+        }
+        
+        if (Array.isArray(data)) {
+            const minLength = 75;
+            const processedText = data
+                .filter(text => text && text.length > minLength)
+                .map(text => text.trim())
+                .filter(text => text.length > minLength)
+                .join(' ');
+                
+            return processedText.length > 100 ? processedText : null;
+        }
+        
+        return null;
     }
     
     async requestSummary(text) {
