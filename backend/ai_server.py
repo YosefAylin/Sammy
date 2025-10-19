@@ -391,12 +391,17 @@ class AIHebrewSummarizer:
                                        target_ratio: float) -> List[Tuple[float, str, int]]:
         """Select sentences ensuring representation from all sections."""
         total_sentences = len(scored_sentences)
-        target_count = max(3, int(total_sentences * target_ratio))
+        target_count = max(2, int(total_sentences * target_ratio))
         
-        # Ensure minimum representation from each section
-        min_opening = max(1, target_count // 4)
-        min_closing = max(1, target_count // 5)
-        min_middle = target_count - min_opening - min_closing
+        # Flexible section representation based on target count
+        if target_count <= 3:
+            # For small summaries, prioritize best sentences regardless of section
+            return scored_sentences[:target_count]
+        
+        # For larger summaries, ensure some section diversity
+        min_opening = max(1, target_count // 5)
+        min_closing = max(1, target_count // 6)
+        min_middle = max(1, target_count - min_opening - min_closing)
         
         selected = []
         section_counts = {'opening': 0, 'middle': 0, 'closing': 0}
@@ -486,7 +491,19 @@ class AIHebrewSummarizer:
     
     def extractive_summarize(self, text: str, top_n: int = 6) -> Dict[str, any]:
         """Main extractive summarization entry point - now uses comprehensive method."""
-        return self.comprehensive_extractive_summarize(text, target_ratio=0.35)
+        # Convert top_n to target_ratio based on estimated sentence count
+        sentences = self.split_sentences(self.preprocess_hebrew_text(text))
+        if len(sentences) > 0:
+            # Be more responsive to user's top_n preference
+            target_ratio = min(0.8, max(0.15, top_n / len(sentences)))
+            # Ensure we don't go below user's request if text is short
+            if len(sentences) <= top_n:
+                target_ratio = 1.0
+        else:
+            target_ratio = 0.35
+        
+        logger.info(f"Extractive: sentences={len(sentences)}, top_n={top_n}, target_ratio={target_ratio:.2f}")
+        return self.comprehensive_extractive_summarize(text, target_ratio)
     
     def comprehensive_abstractive_summarize(self, text: str, target_ratio: float = 0.3) -> Dict[str, any]:
         """
@@ -653,8 +670,13 @@ class AIHebrewSummarizer:
     def abstractive_summarize(self, text: str, max_length: int = 150) -> Dict[str, any]:
         """Main abstractive summarization entry point - now uses comprehensive method."""
         # Convert max_length to target_ratio for consistency
-        estimated_words = len(text.split())
-        target_ratio = min(0.4, max(0.25, max_length / estimated_words)) if estimated_words > 0 else 0.3
+        # For abstractive, we use character-based estimation
+        estimated_chars = len(text)
+        if estimated_chars > 0:
+            # Estimate target ratio based on desired output length
+            target_ratio = min(0.5, max(0.2, (max_length * 6) / estimated_chars))  # ~6 chars per word
+        else:
+            target_ratio = 0.3
         
         return self.comprehensive_abstractive_summarize(text, target_ratio)
     
@@ -697,6 +719,9 @@ def summarize_api():
         method = data.get("method", "extractive")  # "extractive" or "abstractive"
         top_n = data.get("top_n", 6)
         max_length = data.get("max_length", 150)
+        
+        # Log parameters for debugging
+        logger.info(f"Summarization request: method={method}, top_n={top_n}, max_length={max_length}, text_length={len(text)}")
         
         # Choose summarization method
         if method == "abstractive":
