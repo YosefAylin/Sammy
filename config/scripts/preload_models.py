@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 # Add backend to path for imports
-sys.path.append(str(Path(__file__).parent / 'backend'))
+sys.path.append(str(Path(__file__).parent.parent.parent / 'backend'))
 
 from model_manager import ModelManager
 import logging

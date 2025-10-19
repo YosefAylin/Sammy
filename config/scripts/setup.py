@@ -114,7 +114,7 @@ def download_models(python_cmd):
     print("\n🤖 Downloading AI models...")
     
     try:
-        result = subprocess.run([python_cmd, 'preload_models.py'], 
+        result = subprocess.run([python_cmd, 'config/scripts/preload_models.py'], 
                               check=True)
         print("✅ Models downloaded successfully!")
         return True
@@ -122,7 +122,7 @@ def download_models(python_cmd):
     except subprocess.CalledProcessError as e:
         print(f"❌ Failed to download models: {e}")
         print("\n💡 Try manual download:")
-        print(f"   {python_cmd} preload_models.py")
+        print(f"   {python_cmd} config/scripts/preload_models.py")
         return False
 
 def test_installation(python_cmd):
@@ -156,7 +156,7 @@ def show_next_steps(python_cmd):
     print("="*60)
     
     print(f"\n🚀 Start the system:")
-    print(f"   {python_cmd} start_sammy.py")
+    print(f"   {python_cmd} run.py")
     
     print(f"\n🌐 Install Chrome Extension:")
     print(f"   1. Open Chrome → chrome://extensions/")
@@ -197,7 +197,7 @@ def main():
     # Download models
     if not download_models(python_cmd):
         print("\n⚠️  You can download models later with:")
-        print(f"   {python_cmd} preload_models.py")
+        print(f"   {python_cmd} config/scripts/preload_models.py")
     
     # Test installation
     if test_installation(python_cmd):
