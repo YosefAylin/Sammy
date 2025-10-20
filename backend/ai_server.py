@@ -866,56 +866,214 @@ class AIHebrewSummarizer:
     
     def _create_abstractive_style_summary(self, selected_sentences: List[Tuple[float, str, int]], 
                                         all_sentences: List[str]) -> str:
-        """Create abstractive-style summary by intelligent rewriting and paraphrasing."""
-        # Extract and paraphrase key information
-        key_concepts = []
-        for score, sentence, idx in selected_sentences:
-            paraphrased = self._paraphrase_sentence(sentence)
-            if paraphrased and paraphrased != sentence:
-                key_concepts.append(paraphrased)
-            else:
-                # Extract key concepts if paraphrasing fails
-                concepts = self._extract_key_concepts(sentence)
-                if concepts:
-                    key_concepts.append(concepts)
+        """Create abstractive-style summary with intelligent rewriting."""
+        if not selected_sentences:
+            return ""
         
-        if not key_concepts:
-            return selected_sentences[0][1] if selected_sentences else ""
+        # Take top sentences and improve them individually
+        improved_sentences = []
         
-        # Create new flowing narrative
-        if len(key_concepts) == 1:
-            return self._improve_hebrew_flow(key_concepts[0])
+        for score, sentence, idx in selected_sentences[:3]:  # Limit to top 3
+            # Try to paraphrase and improve each sentence
+            improved = self._smart_paraphrase(sentence)
+            if improved and len(improved.split()) >= 5:  # Ensure meaningful length
+                improved_sentences.append(improved)
         
-        # Combine multiple concepts into new sentences
-        combined_summary = self._synthesize_new_summary(key_concepts)
+        if not improved_sentences:
+            # Fallback to original sentences with light editing
+            return self._light_edit_summary([s[1] for s in selected_sentences[:2]])
         
-        return self._improve_hebrew_flow(combined_summary)
+        # Connect improved sentences naturally
+        return self._connect_sentences_naturally(improved_sentences)
     
     def _paraphrase_sentence(self, sentence: str) -> str:
-        """Paraphrase a sentence to create abstractive-style content."""
-        # Hebrew paraphrasing patterns
+        """Advanced paraphrasing with intelligent Hebrew rewriting."""
+        # Extract key information first
+        entities = self._extract_entities(sentence)
+        actions = self._extract_actions(sentence)
+        context = self._extract_context(sentence)
+        
+        # Advanced Hebrew paraphrasing patterns
         paraphrase_patterns = [
-            # Change "זהו X" to "מדובר ב-X"
+            # Formal to informal transformations
             (r'^זהו\s+(.+)', r'מדובר ב\1'),
-            # Change "הוא מכיל" to "כולל"
+            (r'בוצע\s+(.+)', r'נעשה \1'),
+            (r'התקיים\s+(.+)', r'נערך \1'),
+            (r'נמצא כי\s+(.+)', r'התברר ש\1'),
+            
+            # Active to passive voice
+            (r'(.+)\s+ביצע\s+(.+)', r'\2 בוצע על ידי \1'),
+            (r'(.+)\s+פיתח\s+(.+)', r'\2 פותח על ידי \1'),
+            (r'(.+)\s+גילה\s+(.+)', r'\2 התגלה על ידי \1'),
+            
+            # Verb transformations
             (r'הוא מכיל\s+(.+)', r'כולל \1'),
-            # Change "המטרה היא" to "נועד"
+            (r'היא כוללת\s+(.+)', r'מכילה \1'),
             (r'המטרה היא\s+(.+)', r'נועד \1'),
-            # Change "צריך לבדוק" to "נבדק"
-            (r'צריך לבדוק\s+(.+)', r'נבדק \1'),
-            # Change "הוא צריך" to "נדרש"
             (r'הוא צריך\s+(.+)', r'נדרש \1'),
+            (r'יש צורך\s+(.+)', r'נחוץ \1'),
+            
+            # Temporal expressions
+            (r'בזמן האחרון', r'לאחרונה'),
+            (r'בעתיד הקרוב', r'בקרוב'),
+            (r'בעבר', r'קודם לכן'),
+            (r'כיום', r'בימינו'),
+            
+            # Causal expressions
+            (r'בגלל\s+(.+)', r'עקב \1'),
+            (r'כתוצאה מ(.+)', r'בעקבות \1'),
+            (r'על מנת\s+(.+)', r'כדי \1'),
+            
+            # Quantitative expressions
+            (r'מספר רב של', r'רבים'),
+            (r'כמות גדולה של', r'הרבה'),
+            (r'חלק גדול מ', r'רוב'),
         ]
         
         paraphrased = sentence
+        
+        # Apply transformations
         for pattern, replacement in paraphrase_patterns:
             paraphrased = re.sub(pattern, replacement, paraphrased, flags=re.IGNORECASE)
         
-        # If no paraphrasing occurred, try concept extraction
-        if paraphrased == sentence:
-            return self._extract_key_concepts(sentence)
+        # If significant change occurred, return it
+        if self._calculate_change_ratio(sentence, paraphrased) > 0.2:
+            return self._improve_sentence_structure(paraphrased)
         
-        return paraphrased
+        # Otherwise, try intelligent restructuring
+        return self._intelligent_restructure(sentence, entities, actions, context)
+    
+    def _extract_entities(self, sentence: str) -> List[str]:
+        """Extract named entities and important nouns."""
+        # Hebrew entity patterns
+        entity_patterns = [
+            r'\b[א-ת][א-ת]+(?:\s+[א-ת][א-ת]+)*\b',  # Multi-word Hebrew names
+            r'\b(?:ד"ר|פרופ\'|מר|גב\')\s+[א-ת]+\s+[א-ת]+\b',  # Titles with names
+            r'\b[א-ת]+(?:\s+[א-ת]+)*(?:\s+בע"מ|לטד)\b',  # Company names
+            r'\b(?:משרד|מכון|אוניברסיטת|בית)\s+[א-ת]+(?:\s+[א-ת]+)*\b',  # Institutions
+        ]
+        
+        entities = []
+        for pattern in entity_patterns:
+            matches = re.findall(pattern, sentence)
+            entities.extend(matches)
+        
+        return list(set(entities))  # Remove duplicates
+    
+    def _extract_actions(self, sentence: str) -> List[str]:
+        """Extract main actions and verbs."""
+        # Hebrew verb patterns (past, present, future)
+        action_patterns = [
+            r'\b[א-ת]+(?:ה|ו|ת|נו|תם|תן)\b',  # Past tense
+            r'\b(?:מ|נ|ת|י)[א-ת]+(?:ים|ות|ה|ת)?\b',  # Present participle
+            r'\b(?:י|ת|נ)[א-ת]+(?:ו|נה|י|ה)?\b',  # Future tense
+        ]
+        
+        actions = []
+        for pattern in action_patterns:
+            matches = re.findall(pattern, sentence)
+            # Filter out common non-verbs
+            filtered = [m for m in matches if len(m) > 2 and m not in self.hebrew_stopwords]
+            actions.extend(filtered)
+        
+        return list(set(actions))[:3]  # Top 3 actions
+    
+    def _extract_context(self, sentence: str) -> Dict[str, str]:
+        """Extract contextual information like time, place, manner."""
+        context = {}
+        
+        # Time expressions
+        time_patterns = [
+            (r'\b(?:היום|אתמול|מחר|השבוע|החודש|השנה)\b', 'time'),
+            (r'\b(?:בבוקר|בצהריים|בערב|בלילה)\b', 'time'),
+            (r'\b(?:לאחרונה|בעבר|בעתיד|כיום)\b', 'time'),
+        ]
+        
+        # Place expressions
+        place_patterns = [
+            (r'\b(?:בירושלים|בתל אביב|בחיפה|בישראל|בארץ)\b', 'place'),
+            (r'\b(?:במשרד|בבית|באוניברסיטה|בבנק)\b', 'place'),
+        ]
+        
+        # Manner expressions
+        manner_patterns = [
+            (r'\b(?:במהירות|בזהירות|בהצלחה|ביעילות)\b', 'manner'),
+            (r'\b(?:באופן|בצורה|בדרך)\s+[א-ת]+\b', 'manner'),
+        ]
+        
+        all_patterns = time_patterns + place_patterns + manner_patterns
+        
+        for pattern, category in all_patterns:
+            matches = re.findall(pattern, sentence, re.IGNORECASE)
+            if matches and category not in context:
+                context[category] = matches[0]
+        
+        return context
+    
+    def _calculate_change_ratio(self, original: str, modified: str) -> float:
+        """Calculate how much the sentence changed."""
+        orig_words = set(original.lower().split())
+        mod_words = set(modified.lower().split())
+        
+        if len(orig_words) == 0:
+            return 0.0
+        
+        changed_words = orig_words.symmetric_difference(mod_words)
+        return len(changed_words) / len(orig_words)
+    
+    def _improve_sentence_structure(self, sentence: str) -> str:
+        """Improve sentence structure and flow."""
+        # Remove redundant words
+        sentence = re.sub(r'\b(?:כאשר|אשר|אותו|אותה)\s+', '', sentence)
+        
+        # Fix double spaces
+        sentence = re.sub(r'\s+', ' ', sentence)
+        
+        # Ensure proper capitalization
+        if sentence and sentence[0].islower():
+            sentence = sentence[0].upper() + sentence[1:]
+        
+        return sentence.strip()
+    
+    def _intelligent_restructure(self, sentence: str, entities: List[str], 
+                                actions: List[str], context: Dict[str, str]) -> str:
+        """Intelligently restructure sentence using extracted components."""
+        if not entities and not actions:
+            return sentence
+        
+        # Try to create new structure: [Context] [Entity] [Action] [Details]
+        parts = []
+        
+        # Add temporal context first
+        if 'time' in context:
+            parts.append(context['time'])
+        
+        # Add main entity
+        if entities:
+            main_entity = entities[0]  # Take first/most important entity
+            parts.append(main_entity)
+        
+        # Add main action
+        if actions:
+            main_action = actions[0]
+            parts.append(main_action)
+        
+        # Add place context
+        if 'place' in context:
+            parts.append(context['place'])
+        
+        # If we have enough parts, create new sentence
+        if len(parts) >= 2:
+            # Create flowing Hebrew sentence
+            if len(parts) == 2:
+                return f"{parts[0]} {parts[1]}"
+            elif len(parts) == 3:
+                return f"{parts[0]} {parts[1]} {parts[2]}"
+            else:
+                return f"{parts[0]} {parts[1]} {parts[2]} {parts[3]}"
+        
+        # Fallback to original with minor improvements
+        return self._improve_sentence_structure(sentence)
     
     def _synthesize_new_summary(self, concepts: List[str]) -> str:
         """Synthesize new summary from multiple concepts."""
@@ -925,13 +1083,37 @@ class AIHebrewSummarizer:
         if len(concepts) == 1:
             return concepts[0]
         
-        # Create new synthetic sentences
-        synthesis_templates = [
-            "המאמר עוסק ב{} ו{}",
-            "הנושא כולל {} בנוסף ל{}",
-            "המחקר מתמקד ב{} תוך התייחסות ל{}",
-            "הדיון נסוב סביב {} ו{}"
-        ]
+        # Advanced synthesis templates based on content type
+        synthesis_templates = {
+            'news': [
+                "הדיווח מתמקד ב{} ו{}",
+                "העדכון כולל {} בנוסף ל{}",
+                "הכתבה עוסקת ב{} תוך התייחסות ל{}",
+                "החדשות נסובות סביב {} ו{}"
+            ],
+            'research': [
+                "המחקר בחן {} ו{}",
+                "המחקר מתמקד ב{} תוך בדיקת {}",
+                "הממצאים מצביעים על {} ו{}",
+                "החוקרים גילו {} בנוסף ל{}"
+            ],
+            'general': [
+                "הטקסט עוסק ב{} ו{}",
+                "הנושא כולל {} בנוסף ל{}",
+                "התוכן מתמקד ב{} תוך התייחסות ל{}",
+                "הדיון נסוב סביב {} ו{}"
+            ],
+            'culture': [
+                "האירוע כולל {} ו{}",
+                "התערוכה מציגה {} לצד {}",
+                "הפעילות מתמקדת ב{} ו{}",
+                "התוכנית כוללת {} בנוסף ל{}"
+            ]
+        }
+        
+        # Detect content type
+        content_type = self._detect_content_type(' '.join(concepts))
+        templates = synthesis_templates.get(content_type, synthesis_templates['general'])
         
         # Try to combine first two concepts
         if len(concepts) >= 2:
@@ -939,7 +1121,7 @@ class AIHebrewSummarizer:
             concept2 = self._clean_concept_for_synthesis(concepts[1])
             
             if concept1 and concept2:
-                template = synthesis_templates[0]  # Use first template
+                template = templates[0]  # Use first template from detected type
                 synthesized = template.format(concept1, concept2)
                 
                 # Add remaining concepts if any
@@ -953,6 +1135,114 @@ class AIHebrewSummarizer:
         
         # Fallback: just connect with connectors
         return self._connect_ideas(concepts)
+    
+    def _detect_content_type(self, text: str) -> str:
+        """Detect the type of content to choose appropriate synthesis templates."""
+        text_lower = text.lower()
+        
+        # News indicators
+        news_keywords = ['ראש הממשלה', 'שר', 'כנסת', 'ממשלה', 'בחירות', 'מדיניות', 
+                        'החליט', 'הודיע', 'פגישה', 'הצהרה', 'בנק ישראל']
+        if any(keyword in text_lower for keyword in news_keywords):
+            return 'news'
+        
+        # Research indicators  
+        research_keywords = ['מחקר', 'חוקרים', 'אוניברסיטה', 'פרופסור', 'ממצא', 'גילוי',
+                           'פיתוח', 'טכנולוגיה', 'ניסוי', 'תוצאות', 'מסקנה']
+        if any(keyword in text_lower for keyword in research_keywords):
+            return 'research'
+        
+        # Culture indicators
+        culture_keywords = ['תערוכה', 'מוזיאון', 'אמן', 'יצירה', 'תיאטרון', 'קונצרט',
+                          'פסטיבל', 'תרבות', 'אמנות', 'הצגה', 'מופע']
+        if any(keyword in text_lower for keyword in culture_keywords):
+            return 'culture'
+        
+        return 'general'
+    
+    def _smart_paraphrase(self, sentence: str) -> str:
+        """Smart paraphrasing that maintains meaning while changing structure."""
+        # Simple but effective transformations
+        transformations = [
+            # Passive to active voice
+            (r'(.+)\s+בוצע\s+על ידי\s+(.+)', r'\2 ביצע \1'),
+            (r'(.+)\s+נעשה\s+על ידי\s+(.+)', r'\2 עשה \1'),
+            
+            # Formal to natural language
+            (r'בוצע\s+(.+)', r'נעשה \1'),
+            (r'התקיים\s+(.+)', r'נערך \1'),
+            (r'נמצא כי\s+(.+)', r'התברר ש\1'),
+            (r'הוחלט כי\s+(.+)', r'החליטו ש\1'),
+            
+            # Simplify complex structures
+            (r'על מנת\s+(.+)', r'כדי \1'),
+            (r'בכדי\s+(.+)', r'כדי \1'),
+            (r'לשם\s+(.+)', r'כדי \1'),
+            
+            # Improve flow
+            (r'כמו כן,?\s*', 'בנוסף, '),
+            (r'יתר על כן,?\s*', 'כמו כן, '),
+            (r'בנוסף לכך,?\s*', 'בנוסף, '),
+        ]
+        
+        result = sentence
+        for pattern, replacement in transformations:
+            new_result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
+            if new_result != result:
+                result = new_result
+                break  # Apply only one transformation per sentence
+        
+        # Clean up the result
+        result = re.sub(r'\s+', ' ', result).strip()
+        
+        # Ensure proper capitalization
+        if result and result[0].islower():
+            result = result[0].upper() + result[1:]
+        
+        return result
+    
+    def _light_edit_summary(self, sentences: List[str]) -> str:
+        """Light editing of original sentences for better flow."""
+        if not sentences:
+            return ""
+        
+        edited = []
+        for sentence in sentences[:2]:  # Max 2 sentences
+            # Light improvements
+            clean = re.sub(r'\s+', ' ', sentence).strip()
+            
+            # Remove redundant phrases
+            clean = re.sub(r'\b(כאמור|כפי שצוין|כידוע)\b,?\s*', '', clean, flags=re.IGNORECASE)
+            
+            if len(clean.split()) >= 5:  # Ensure meaningful content
+                edited.append(clean)
+        
+        return '. '.join(edited) + '.' if edited else sentences[0]
+    
+    def _connect_sentences_naturally(self, sentences: List[str]) -> str:
+        """Connect sentences with natural Hebrew connectors."""
+        if not sentences:
+            return ""
+        
+        if len(sentences) == 1:
+            return sentences[0] + ('.' if not sentences[0].endswith('.') else '')
+        
+        # Connect with appropriate connectors
+        connectors = ['בנוסף', 'כמו כן', 'יתר על כן']
+        
+        result = sentences[0]
+        for i, sentence in enumerate(sentences[1:], 1):
+            if i < len(connectors):
+                connector = connectors[i-1]
+                result += f'. {connector}, {sentence.lower()}'
+            else:
+                result += f'. {sentence}'
+        
+        # Ensure proper ending
+        if not result.endswith('.'):
+            result += '.'
+        
+        return result
     
     def _clean_concept_for_synthesis(self, concept: str) -> str:
         """Clean concept for use in synthesis templates."""
@@ -1010,15 +1300,102 @@ class AIHebrewSummarizer:
         return connected
     
     def _improve_hebrew_flow(self, text: str) -> str:
-        """Improve Hebrew text flow and readability."""
-        # Basic flow improvements
-        text = re.sub(r'\s+', ' ', text)  # Clean spaces
-        text = re.sub(r'\.+', '.', text)  # Fix multiple periods
-        text = text.strip()
+        """Improve Hebrew text flow and readability with advanced cleanup."""
+        if not text:
+            return ""
+        
+        # Remove duplicate phrases and words
+        text = self._remove_duplicates(text)
+        
+        # Fix word order and grammar
+        text = self._fix_hebrew_grammar(text)
+        
+        # Clean up spacing and punctuation
+        text = re.sub(r'\s+', ' ', text)  # Multiple spaces
+        text = re.sub(r'\.+', '.', text)  # Multiple periods
+        text = re.sub(r'\s+([,.!?])', r'\1', text)  # Space before punctuation
+        text = re.sub(r'([,.!?])\s*([,.!?])', r'\1 \2', text)  # Multiple punctuation
+        
+        # Remove incomplete fragments
+        sentences = [s.strip() for s in text.split('.') if s.strip()]
+        valid_sentences = []
+        
+        for sentence in sentences:
+            # Keep sentences that are complete and meaningful
+            if (len(sentence.split()) >= 3 and 
+                not sentence.endswith(('ו', 'ב', 'ל', 'מ', 'כ', 'ש')) and
+                len(sentence) > 15):
+                valid_sentences.append(sentence)
+        
+        if not valid_sentences:
+            return text.strip()
+        
+        # Reconstruct text
+        result = '. '.join(valid_sentences)
+        
+        # Ensure proper capitalization
+        if result and result[0].islower():
+            result = result[0].upper() + result[1:]
         
         # Ensure proper ending
-        if text and not text.endswith(('.', '!', '?')):
-            text += '.'
+        if result and not result.endswith(('.', '!', '?')):
+            result += '.'
+        
+        return result.strip()
+    
+    def _remove_duplicates(self, text: str) -> str:
+        """Remove duplicate words and phrases."""
+        words = text.split()
+        seen_phrases = set()
+        result_words = []
+        
+        i = 0
+        while i < len(words):
+            # Check for 2-3 word phrases
+            for phrase_len in [3, 2]:
+                if i + phrase_len <= len(words):
+                    phrase = ' '.join(words[i:i+phrase_len])
+                    if phrase not in seen_phrases:
+                        seen_phrases.add(phrase)
+                        if phrase_len == 3:
+                            result_words.extend(words[i:i+phrase_len])
+                            i += phrase_len
+                            break
+                        elif phrase_len == 2 and i + 2 == len(words):  # Last phrase
+                            result_words.extend(words[i:i+phrase_len])
+                            i += phrase_len
+                            break
+            else:
+                # Single word
+                if words[i] not in result_words[-2:]:  # Avoid immediate repetition
+                    result_words.append(words[i])
+                i += 1
+        
+        return ' '.join(result_words)
+    
+    def _fix_hebrew_grammar(self, text: str) -> str:
+        """Fix basic Hebrew grammar and word order."""
+        # Fix common grammar issues
+        fixes = [
+            # Fix definite article repetition
+            (r'\bה([א-ת]+)\s+ה\1\b', r'ה\1'),
+            
+            # Fix preposition repetition  
+            (r'\b(ב|ל|מ|כ|ש)([א-ת]+)\s+\1([א-ת]+)\b', r'\1\2 \3'),
+            
+            # Fix verb-subject order
+            (r'\b([א-ת]+ים|[א-ת]+ות)\s+(מ[א-ת]+ים|מ[א-ת]+ות)\b', r'\2 \1'),
+            
+            # Remove redundant conjunctions
+            (r'\s+ו\s+ו\s+', ' ו'),
+            (r'\s+כי\s+כי\s+', ' כי '),
+            
+            # Fix spacing around prepositions
+            (r'\s+(ב|ל|מ|כ|ש)([א-ת])', r' \1\2'),
+        ]
+        
+        for pattern, replacement in fixes:
+            text = re.sub(pattern, replacement, text)
         
         return text
     
