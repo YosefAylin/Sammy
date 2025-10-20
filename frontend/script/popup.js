@@ -77,7 +77,7 @@ class SummaryUI {
             'abstractive': 'יוצר סיכום חדש בשפה טבעית'
         };
         
-        // Hide slider when changing methods
+        // Hide slider when changing methods (will show again after summary)
         this.hideLengthControl();
         
         // Update button text based on method
@@ -139,11 +139,18 @@ class SummaryUI {
         this.currentSummary = data.summary;
         const metadata = data.metadata || {};
         const isUltraShort = metadata.method === 'ultra_short_extractive';
+        const currentMethod = this.methodSelect ? this.methodSelect.value : 'extractive';
+        
+        // Only show compression stats for extractive method
+        const showStats = currentMethod === 'extractive' && 
+                          metadata.compression_ratio && 
+                          metadata.summary_sentences && 
+                          metadata.original_sentences;
         
         this.paraElement.innerHTML = `
             <div class="summary-container">
                 <div class="summary-text">${data.summary}</div>
-                ${(metadata.compression_ratio && metadata.summary_sentences && metadata.original_sentences) ? `
+                ${showStats ? `
                     <div class="summary-stats">
                         דחיסה: ${Math.round(metadata.compression_ratio * 100)}% 
                         (${metadata.summary_sentences}/${metadata.original_sentences} משפטים)
@@ -151,7 +158,7 @@ class SummaryUI {
                 ` : ''}
                 <div class="summary-actions">
                     <button id="copy-summary" class="action-btn">העתק</button>
-                    ${(isUltraShort || metadata.summary_sentences <= 5) ? '<button id="expand-summary" class="action-btn expand-btn">הרחב סיכום</button>' : ''}
+                    ${(currentMethod === 'extractive' && (isUltraShort || metadata.summary_sentences <= 5)) ? '<button id="expand-summary" class="action-btn expand-btn">הרחב סיכום</button>' : ''}
                     <button id="retry-summary" class="action-btn">סכם מחדש</button>
                 </div>
             </div>
@@ -161,12 +168,16 @@ class SummaryUI {
         document.getElementById("copy-summary").addEventListener("click", () => this.copyToClipboard());
         document.getElementById("retry-summary").addEventListener("click", () => this.handleScrape());
         
-        // Show length control and add expand functionality for short summaries
-        if (isUltraShort || metadata.summary_sentences <= 5) {
+        // Only show length control for extractive method
+        if (currentMethod === 'extractive') {
             this.showLengthControl();
-            const expandBtn = document.getElementById("expand-summary");
-            if (expandBtn) {
-                expandBtn.addEventListener("click", () => this.expandSummary());
+            
+            // Add expand functionality for short summaries (only for extractive)
+            if (isUltraShort || metadata.summary_sentences <= 5) {
+                const expandBtn = document.getElementById("expand-summary");
+                if (expandBtn) {
+                    expandBtn.addEventListener("click", () => this.expandSummary());
+                }
             }
         }
         
@@ -349,6 +360,13 @@ class SummaryUI {
         this.currentSummary = cachedData.summary;
         const metadata = cachedData.metadata || {};
         const isUltraShort = metadata.method === 'ultra_short_extractive';
+        const cachedMethod = cachedData.method || 'extractive';
+        
+        // Only show compression stats for extractive method
+        const showStats = cachedMethod === 'extractive' && 
+                          metadata.compression_ratio && 
+                          metadata.summary_sentences && 
+                          metadata.original_sentences;
         
         this.paraElement.innerHTML = `
             <div class="summary-container">
@@ -356,7 +374,7 @@ class SummaryUI {
                     📋 סיכום שמור (יימחק ברענון הדף)
                 </div>
                 <div class="summary-text">${cachedData.summary}</div>
-                ${(metadata.compression_ratio && metadata.summary_sentences && metadata.original_sentences) ? `
+                ${showStats ? `
                     <div class="summary-stats">
                         דחיסה: ${Math.round(metadata.compression_ratio * 100)}% 
                         (${metadata.summary_sentences}/${metadata.original_sentences} משפטים)
@@ -364,7 +382,7 @@ class SummaryUI {
                 ` : ''}
                 <div class="summary-actions">
                     <button id="copy-summary" class="action-btn">העתק</button>
-                    ${(isUltraShort || metadata.summary_sentences <= 5) ? '<button id="expand-summary" class="action-btn expand-btn">הרחב סיכום</button>' : ''}
+                    ${(cachedMethod === 'extractive' && (isUltraShort || metadata.summary_sentences <= 5)) ? '<button id="expand-summary" class="action-btn expand-btn">הרחב סיכום</button>' : ''}
                     <button id="refresh-summary" class="action-btn">סכם מחדש</button>
                 </div>
             </div>
@@ -374,12 +392,16 @@ class SummaryUI {
         document.getElementById("copy-summary").addEventListener("click", () => this.copyToClipboard());
         document.getElementById("refresh-summary").addEventListener("click", () => this.handleScrape());
         
-        // Show length control and add expand functionality for short summaries
-        if (isUltraShort || metadata.summary_sentences <= 5) {
+        // Only show length control for extractive method
+        if (cachedMethod === 'extractive') {
             this.showLengthControl();
-            const expandBtn = document.getElementById("expand-summary");
-            if (expandBtn) {
-                expandBtn.addEventListener("click", () => this.expandSummary());
+            
+            // Add expand functionality for short summaries (only for extractive)
+            if (isUltraShort || metadata.summary_sentences <= 5) {
+                const expandBtn = document.getElementById("expand-summary");
+                if (expandBtn) {
+                    expandBtn.addEventListener("click", () => this.expandSummary());
+                }
             }
         }
         
