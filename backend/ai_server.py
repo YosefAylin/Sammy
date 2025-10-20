@@ -86,9 +86,9 @@ class AIHebrewSummarizer:
             # Get Dicta path (download if needed)
             dicta_path = self.model_manager.get_model_path('dicta')
             
-            from transformers import AutoModelForCausalLM
+            from transformers import AutoModelForSeq2SeqLM
             self.abstractive_tokenizer = AutoTokenizer.from_pretrained(dicta_path)
-            self.abstractive_model = AutoModelForCausalLM.from_pretrained(dicta_path).to(self.device)
+            self.abstractive_model = AutoModelForSeq2SeqLM.from_pretrained(dicta_path).to(self.device)
             self.abstractive_model.eval()
             
             # Set pad token if not exists
@@ -106,23 +106,38 @@ class AIHebrewSummarizer:
             raise
     
     def preprocess_hebrew_text(self, text: str) -> str:
-        """Clean and preprocess Hebrew text."""
+        """Clean and preprocess Hebrew text, removing metadata and noise."""
         # Remove web artifacts
         text = re.sub(r'\s+', ' ', text)
         text = re.sub(r'\n+', ' ', text)
         
-        # Remove common noise
+        # Light noise patterns including betting content
         noise_patterns = [
-            r'קרא עוד.*?(?=\.|$)',
-            r'לחץ כאן.*?(?=\.|$)',
-            r'פרסומת.*?(?=\.|$)',
-            r'ממומן.*?(?=\.|$)',
-            r'מידע נוסף.*?(?=\.|$)',
-            r'תגובות.*?(?=\.|$)'
+            # Clear UI elements
+            r'\bקרא עוד\b',
+            r'\bלחץ כאן\b',
+            r'\bממומן\b',
+            r'\bTaboola\b',
+            r'\boutbrain\b',
+            
+            # Betting and odds content
+            r'\bיתרון\b.*?\d+\.\d+',
+            r'\bרגיל\b.*?\d+\.\d+',
+            r'\bמעל/מתחת\b',
+            r'\d+\.\d+X\d+\.\d+',
+            r'מתוך \d+ משחקים',
+            
+            # Standalone URLs and emails
+            r'\bwww\.\S+',
+            r'\bhttp\S+',
+            r'\S+@\S+\.\S+'
         ]
         
         for pattern in noise_patterns:
             text = re.sub(pattern, '', text, flags=re.IGNORECASE)
+        
+        # Remove multiple spaces again after cleaning
+        text = re.sub(r'\s+', ' ', text)
         
         return text.strip()
     
@@ -147,14 +162,27 @@ class AIHebrewSummarizer:
         return processed_sentences
     
     def _is_noise_sentence(self, sentence: str) -> bool:
-        """Detect noise sentences."""
+        """Detect noise sentences including metadata."""
         noise_patterns = [
-            r'^\d+\.\s*$',
-            r'^[^\u0590-\u05FF]*$',
-            r'(קרא עוד|לחץ כאן|מידע נוסף|פרסומת|ממומן)',
-            r'^\W+$'
+            # Only clear noise patterns
+            r'^\d+\.\s*$',  # Numbers only
+            r'^\W+$',       # Symbols only
+            r'^.{1,15}$',   # Very short
+            
+            # Clear UI elements (exact matches)
+            r'^(קרא עוד|לחץ כאן|שתף|לייק)$',
+            
+            # Standalone external services
+            r'^(taboola|outbrain|sponsored)$',
+            
+            # Standalone URLs/emails
+            r'^\S+@\S+\.\S+$',
+            r'^(www\.|http)',
+            
+            # Repeated patterns
+            r'^(.+?)\1+$'
         ]
-        return any(re.search(pattern, sentence) for pattern in noise_patterns)
+        return any(re.search(pattern, sentence, re.IGNORECASE) for pattern in noise_patterns)
     
     def _has_hebrew_content(self, text: str) -> bool:
         """Check if text has sufficient Hebrew content."""
@@ -172,7 +200,7 @@ class AIHebrewSummarizer:
             return self.embedding_cache[cache_key]
         
         embeddings = []
-        batch_size = 8
+        batch_size = 4  # Reduced for faster processing
         
         for i in range(0, len(sentences), batch_size):
             batch = sentences[i:i + batch_size]
@@ -248,7 +276,7 @@ class AIHebrewSummarizer:
         
         return sorted(scores, key=lambda x: x[0], reverse=True)
     
-    def comprehensive_extractive_summarize(self, text: str, target_ratio: float = 0.35) -> Dict[str, any]:
+    def comprehensive_extractive_summarize(self, text: str, target_ratio: float = 0.35, title: str = "") -> Dict[str, any]:
         """
         Comprehensive extractive summarization following the guidelines:
         - Captures main ideas from opening, middle, and closing sections
@@ -258,34 +286,53 @@ class AIHebrewSummarizer:
         """
         start_time = time.time()
         
+        # Debug logging
+        logger.info(f"Starting comprehensive_extractive_summarize with target_ratio={target_ratio:.2f}")
+        
         try:
             # 1. Preprocess and analyze text structure
             clean_text = self.preprocess_hebrew_text(text)
             sentences = self.split_sentences(clean_text)
             
+            # Quick processing for short texts
             if len(sentences) < 5:
                 return self._create_short_summary(clean_text, sentences, start_time)
             
-            # 2. Identify sections (opening, middle, closing)
+            # Ultra-short summary for very low target ratio
+            if target_ratio <= 0.25:
+                return self._create_ultra_short_summary(sentences, target_ratio, start_time, title)
+            
+            # Fast processing for medium texts
+            if len(sentences) < 15:
+                return self._fast_extractive_summarize(sentences, target_ratio, start_time, title)
+            
+            # 2. Identify central theme from title and opening sentences
+            central_theme = self._identify_central_theme(sentences[:3], title)
+            logger.info(f"Identified central theme keywords: {central_theme}")
+            
+            # 3. Identify sections (opening, middle, closing)
             sections = self._identify_text_sections(sentences)
             
-            # 3. Get embeddings for all sentences
+            # 4. Get embeddings for all sentences
             embeddings = self.get_sentence_embeddings(tuple(sentences))
             
-            # 4. Score sentences with section-aware algorithm
-            scored_sentences = self._comprehensive_sentence_scoring(
-                sentences, embeddings, sections
+            # 5. Score sentences with theme-aware algorithm
+            scored_sentences = self._theme_aware_sentence_scoring(
+                sentences, embeddings, sections, central_theme
             )
             
-            # 5. Select sentences ensuring representation from all sections
+            # 6. Select sentences ensuring representation from all sections
             selected_sentences = self._select_representative_sentences(
                 scored_sentences, sections, target_ratio
             )
             
-            # 6. Reorder and create flowing narrative
+            # 7. Ensure central theme appears at the beginning
+            selected_sentences = self._prioritize_theme_in_opening(selected_sentences, central_theme)
+            
+            # 8. Reorder and create flowing narrative
             final_summary = self._create_flowing_summary(selected_sentences, sentences)
             
-            # 7. Post-process for coherence
+            # 8. Post-process for coherence
             polished_summary = self._polish_summary_flow(final_summary)
             
             return {
@@ -402,6 +449,9 @@ class AIHebrewSummarizer:
         total_sentences = len(scored_sentences)
         target_count = max(2, int(total_sentences * target_ratio))
         
+        # Debug logging
+        logger.info(f"Selection: total_sentences={total_sentences}, target_ratio={target_ratio:.2f}, target_count={target_count}")
+        
         # Flexible section representation based on target count
         if target_count <= 3:
             # For small summaries, prioritize best sentences regardless of section
@@ -445,7 +495,237 @@ class AIHebrewSummarizer:
                 selected.append((score, sentence, idx))
                 remaining_slots -= 1
         
+        # Debug logging
+        logger.info(f"Selected {len(selected)} sentences (target was {target_count})")
+        
         return selected
+    
+    def _prioritize_theme_in_opening(self, selected_sentences: List[Tuple[float, str, int]], 
+                                   theme_keywords: List[str]) -> List[Tuple[float, str, int]]:
+        """Ensure sentences with central theme appear early in the summary."""
+        if not theme_keywords:
+            return selected_sentences
+        
+        theme_sentences = []
+        other_sentences = []
+        
+        for score, sentence, idx in selected_sentences:
+            sentence_lower = sentence.lower()
+            has_theme = any(keyword.lower() in sentence_lower for keyword in theme_keywords)
+            
+            if has_theme:
+                theme_sentences.append((score, sentence, idx))
+            else:
+                other_sentences.append((score, sentence, idx))
+        
+        # Sort theme sentences by original position (to maintain flow)
+        theme_sentences.sort(key=lambda x: x[2])
+        other_sentences.sort(key=lambda x: x[2])
+        
+        # Combine: theme sentences first, then others
+        return theme_sentences + other_sentences
+    
+    def _create_ultra_short_summary(self, sentences: List[str], target_ratio: float, 
+                                   start_time: float, title: str = "") -> Dict[str, any]:
+        """Create short summary (3-5 sentences) focusing on main theme."""
+        central_theme = self._identify_central_theme(sentences[:3], title)
+        
+        # For short summary, we want 3-5 sentences based on text length
+        base_count = int(len(sentences) * target_ratio)
+        target_count = min(5, max(3, base_count))
+        
+        scored_sentences = []
+        for i, sentence in enumerate(sentences):
+            sentence_lower = sentence.lower()
+            
+            # Theme relevance score
+            theme_score = 0
+            for keyword in central_theme:
+                if keyword.lower() in sentence_lower:
+                    theme_score += 1.5  # Good weight for theme
+            
+            # Position score (distribute across text)
+            if i < 3:
+                pos_score = 2.5  # Opening is important
+            elif i >= len(sentences) - 3:
+                pos_score = 2.0  # Closing is also important
+            else:
+                pos_score = 1.5  # Middle content
+            
+            # Length score (prefer informative sentences)
+            optimal_length = 120
+            len_score = 1.0 - abs(len(sentence) - optimal_length) / optimal_length
+            len_score = max(0.3, len_score) * 1.5
+            
+            # Hebrew content score
+            hebrew_ratio = len([c for c in sentence if '\u0590' <= c <= '\u05FF']) / len(sentence)
+            
+            # Information density (avoid very simple sentences)
+            word_count = len(sentence.split())
+            info_score = min(1.5, word_count / 15) if word_count > 5 else 0.5
+            
+            total_score = theme_score + pos_score + len_score + hebrew_ratio + info_score
+            scored_sentences.append((total_score, sentence, i))
+        
+        # Select top sentences
+        scored_sentences.sort(key=lambda x: x[0], reverse=True)
+        selected = scored_sentences[:target_count]
+        
+        # Sort by original position for flow
+        selected.sort(key=lambda x: x[2])
+        summary = ' '.join([s[1] for s in selected])
+        
+        return {
+            "summary": summary,
+            "metadata": {
+                "method": "ultra_short_extractive",
+                "original_sentences": len(sentences),
+                "summary_sentences": len(selected),
+                "compression_ratio": len(selected) / len(sentences),
+                "central_theme": central_theme,
+                "processing_time": time.time() - start_time,
+                "note": f"Short summary with {len(selected)} sentences focusing on main theme"
+            }
+        }
+    
+    def _identify_central_theme(self, opening_sentences: List[str], title: str = "") -> List[str]:
+        """Identify central theme keywords from title and opening sentences."""
+        theme_keywords = []
+        
+        # Combine title and opening sentences (title gets priority)
+        combined_text = f"{title} {' '.join(opening_sentences)}".lower()
+        
+        # Hebrew keywords that often indicate main themes
+        theme_indicators = [
+            # Political/social themes
+            'משטרה', 'ממשלה', 'כנסת', 'בית משפט', 'חוק', 'מדיניות',
+            'הפגנה', 'מחאה', 'עצרת', 'שביתה',
+            
+            # Economic themes  
+            'כלכלה', 'משק', 'תקציב', 'מס', 'שכר', 'מחירים', 'יוקר',
+            
+            # Security themes
+            'ביטחון', 'צבא', 'מלחמה', 'טרור', 'איום', 'פיגוע',
+            
+            # Social themes
+            'חברה', 'חינוך', 'בריאות', 'דיור', 'תחבורה', 'סביבה',
+            
+            # Sports themes
+            'כדורגל', 'ספורט', 'משחק', 'קבוצה', 'שחקן', 'מאמן', 'ליגה'
+        ]
+        
+        # Find theme keywords in combined text
+        for keyword in theme_indicators:
+            if keyword in combined_text:
+                theme_keywords.append(keyword)
+        
+        # Extract key entities (proper nouns) - prioritize title
+        import re
+        title_entities = re.findall(r'\b[א-ת][א-ת]+(?:\s+[א-ת][א-ת]+)*\b', title.lower()) if title else []
+        text_entities = re.findall(r'\b[א-ת][א-ת]+(?:\s+[א-ת][א-ת]+)*\b', combined_text)
+        
+        # Add significant entities (prioritize title entities)
+        all_entities = title_entities + text_entities
+        for entity in all_entities:
+            if len(entity) > 3 and entity not in theme_keywords:
+                theme_keywords.append(entity)
+        
+        return theme_keywords[:7]  # Return top 7 theme elements
+    
+    def _theme_aware_sentence_scoring(self, sentences: List[str], embeddings: np.ndarray, 
+                                    sections: Dict[str, List[int]], theme_keywords: List[str]) -> List[Tuple[float, str, int]]:
+        """Score sentences with awareness of central theme."""
+        scores = []
+        
+        for i, sentence in enumerate(sentences):
+            sentence_lower = sentence.lower()
+            
+            # Base score from embeddings (calculate similarity to all sentences)
+            sentence_embedding = embeddings[i]
+            similarities = np.dot(embeddings, sentence_embedding) / (
+                np.linalg.norm(embeddings, axis=1) * np.linalg.norm(sentence_embedding)
+            )
+            base_score = np.mean(similarities)
+            
+            # Theme relevance score
+            theme_score = 0
+            for keyword in theme_keywords:
+                if keyword.lower() in sentence_lower:
+                    theme_score += 1
+            
+            # Normalize theme score
+            theme_score = min(theme_score / max(len(theme_keywords), 1), 1.0)
+            
+            # Position score (opening and closing are important)
+            if i in sections['opening']:
+                position_score = 1.0
+            elif i in sections['closing']:
+                position_score = 0.8
+            else:
+                position_score = 0.6
+            
+            # Length score (prefer medium-length sentences)
+            length_score = min(len(sentence) / 150, 1.0)
+            
+            # Combined score with theme emphasis
+            final_score = (base_score * 0.4 + 
+                          theme_score * 0.4 + 
+                          position_score * 0.15 + 
+                          length_score * 0.05)
+            
+            scores.append((final_score, sentence, i))
+        
+        return sorted(scores, key=lambda x: x[0], reverse=True)
+    
+    def _fast_extractive_summarize(self, sentences: List[str], target_ratio: float, start_time: float, title: str = "") -> Dict[str, any]:
+        """Fast summarization for medium-length texts with theme awareness."""
+        target_count = max(2, int(len(sentences) * target_ratio))
+        
+        # Identify theme from title and first sentences
+        theme_keywords = self._identify_central_theme(sentences[:2], title)
+        
+        # Theme-aware scoring
+        scored_sentences = []
+        for i, sentence in enumerate(sentences):
+            sentence_lower = sentence.lower()
+            
+            # Position score (beginning and end are important)
+            pos_score = 1.0 if i < 2 or i >= len(sentences) - 2 else 0.5
+            
+            # Length score (prefer medium-length sentences)
+            len_score = min(1.0, len(sentence) / 100)
+            
+            # Hebrew content score
+            hebrew_ratio = len([c for c in sentence if '\u0590' <= c <= '\u05FF']) / len(sentence)
+            
+            # Theme relevance score
+            theme_score = 0
+            for keyword in theme_keywords:
+                if keyword.lower() in sentence_lower:
+                    theme_score += 0.5
+            
+            total_score = pos_score + len_score + hebrew_ratio + theme_score
+            scored_sentences.append((total_score, sentence, i))
+        
+        # Select top sentences
+        scored_sentences.sort(key=lambda x: x[0], reverse=True)
+        selected = scored_sentences[:target_count]
+        
+        # Reorder by original position
+        selected.sort(key=lambda x: x[2])
+        summary = ' '.join([s[1] for s in selected])
+        
+        return {
+            "summary": summary,
+            "metadata": {
+                "method": "fast_extractive_with_theme",
+                "original_sentences": len(sentences),
+                "summary_sentences": len(selected),
+                "compression_ratio": len(selected) / len(sentences),
+                "central_theme": theme_keywords,
+                "processing_time": time.time() - start_time
+            }
+        }
     
     def _create_flowing_summary(self, selected_sentences: List[Tuple[float, str, int]], 
                                all_sentences: List[str]) -> str:
@@ -532,14 +812,22 @@ class AIHebrewSummarizer:
             logger.error(f"Extractive summarization failed: {e}")
             return self._fallback_summary(text, start_time)
     
-    def comprehensive_abstractive_summarize(self, text: str, target_ratio: float = 0.3) -> Dict[str, any]:
+    def comprehensive_abstractive_summarize(self, text: str, target_ratio: float = 0.3, title: str = "") -> Dict[str, any]:
         """
         Hebrew-optimized abstractive summarization:
         - Uses AlephBERT for understanding + intelligent rewriting
         - Uses native Hebrew models for better quality
         - Creates flowing, natural summaries
+        - Deterministic results for same input
         """
         start_time = time.time()
+        
+        # Set seed for consistent results
+        import torch
+        import numpy as np
+        text_hash = hash(text + str(target_ratio)) % 2**32
+        torch.manual_seed(text_hash)
+        np.random.seed(text_hash)
         
         try:
             clean_text = self.preprocess_hebrew_text(text)
@@ -552,17 +840,25 @@ class AIHebrewSummarizer:
             result = self._hebrew_optimized_abstractive(sentences, target_ratio, start_time)
             
             # Try Dicta Hebrew generation for true abstractive summarization
-            if len(sentences) >= 3 and len(clean_text) > 200:
+            if len(sentences) >= 5 and len(clean_text) > 300:  # More strict requirements
                 improved_result = self._improved_mt5_generation(clean_text, target_ratio, start_time)
                 # Use improved generation if it produces reasonable output
-                if self._is_reasonable_summary(improved_result.get("summary", ""), clean_text):
+                summary_text = improved_result.get("summary", "")
+                if (summary_text and 
+                    len(summary_text) > 50 and 
+                    self._is_reasonable_summary(summary_text, clean_text)):
+                    logger.info("Using MT5 generation - quality check passed")
                     return improved_result
+                else:
+                    logger.info("MT5 generation failed quality check, falling back to extractive")
             
             return result
             
         except Exception as e:
             logger.error(f"Abstractive summarization failed: {e}")
-            return self._fallback_summary(text, start_time)
+            # Fall back to comprehensive extractive instead of simple fallback
+            logger.info("Falling back to comprehensive extractive summarization")
+            return self.comprehensive_extractive_summarize(text, target_ratio, title)
     
     def _hebrew_optimized_abstractive(self, sentences: List[str], target_ratio: float, start_time: float) -> Dict[str, any]:
         """Hebrew-optimized abstractive using AlephBERT understanding."""
@@ -769,17 +1065,21 @@ class AIHebrewSummarizer:
             ).to(self.device)
             
             with torch.no_grad():
+                # Set seed for deterministic generation
+                torch.manual_seed(hash(text) % 2**32)
+                
                 summary_ids = self.abstractive_model.generate(
                     inputs["input_ids"],
                     attention_mask=inputs["attention_mask"],
                     max_length=inputs["input_ids"].shape[1] + target_length,
                     min_length=inputs["input_ids"].shape[1] + 30,
-                    temperature=0.7,
+                    temperature=0.6,  # Balanced temperature for quality + some consistency
                     do_sample=True,
-                    top_p=0.9,
-                    repetition_penalty=1.2,
+                    top_p=0.85,  # Allow more variety but still focused
+                    repetition_penalty=1.3,  # Stronger penalty for repetitions
                     pad_token_id=self.abstractive_tokenizer.pad_token_id,
-                    eos_token_id=self.abstractive_tokenizer.eos_token_id
+                    eos_token_id=self.abstractive_tokenizer.eos_token_id,
+                    no_repeat_ngram_size=3  # Prevent 3-word repetitions
                 )
             
             # Extract only the generated part (after the prompt)
@@ -790,13 +1090,17 @@ class AIHebrewSummarizer:
             
             summary = self._clean_dicta_output(generated_text)
             
+            # Calculate proper metadata
+            original_sentences = len([s for s in text.split('.') if s.strip()])
+            summary_sentences = len([s for s in summary.split('.') if s.strip()])
+            
             return {
                 "summary": summary,
                 "metadata": {
                     "method": "dicta_hebrew_generation",
-                    "original_length": len(text),
-                    "summary_length": len(summary),
-                    "compression_ratio": len(summary) / len(text),
+                    "original_sentences": original_sentences,
+                    "summary_sentences": summary_sentences,
+                    "compression_ratio": summary_sentences / max(original_sentences, 1),
                     "processing_time": time.time() - start_time,
                     "model": "Dicta Hebrew LM 2.0"
                 }
@@ -951,16 +1255,51 @@ class AIHebrewSummarizer:
         return text
     
     def _clean_dicta_output(self, text: str) -> str:
-        """Clean Dicta model output."""
+        """Clean Dicta model output and fix common issues."""
         text = text.strip()
         
         # Remove prompt remnants
         if text.startswith('סיכום הטקסט:'):
             text = text[12:].strip()
         
-        # Clean up
+        # Clean up basic formatting
         text = re.sub(r'\n+', ' ', text)
         text = re.sub(r'\s+', ' ', text)
+        
+        # Remove repetitive patterns (like "doping, אך ורק בספורט תחרותי")
+        # Find and remove repeated phrases
+        words = text.split()
+        cleaned_words = []
+        i = 0
+        while i < len(words):
+            # Check for repetitive patterns
+            if i < len(words) - 3:
+                # Look for patterns that repeat 2-3 times
+                pattern_found = False
+                for pattern_len in [2, 3, 4]:
+                    if i + pattern_len * 2 <= len(words):
+                        pattern1 = ' '.join(words[i:i+pattern_len])
+                        pattern2 = ' '.join(words[i+pattern_len:i+pattern_len*2])
+                        if pattern1 == pattern2:
+                            # Found repetition, skip the repeated part
+                            cleaned_words.extend(words[i:i+pattern_len])
+                            i += pattern_len * 2
+                            pattern_found = True
+                            break
+                
+                if not pattern_found:
+                    cleaned_words.append(words[i])
+                    i += 1
+            else:
+                cleaned_words.append(words[i])
+                i += 1
+        
+        text = ' '.join(cleaned_words)
+        
+        # Remove incomplete sentences at the end
+        sentences = text.split('.')
+        if len(sentences) > 1 and len(sentences[-1].strip()) < 10:
+            text = '.'.join(sentences[:-1]) + '.'
         
         # Ensure proper ending
         if text and not text.endswith(('.', '!', '?')):
@@ -982,18 +1321,58 @@ class AIHebrewSummarizer:
         return summary
     
     def _is_reasonable_summary(self, summary: str, original: str) -> bool:
-        """Check if mT5 summary is reasonable quality."""
-        if not summary or len(summary) < 20:
+        """Check if summary is reasonable quality - strict validation."""
+        if not summary or len(summary) < 50:  # Minimum meaningful length
             return False
         
-        # Check for Hebrew content
+        # Check for Hebrew content (must be majority Hebrew)
         hebrew_chars = len(re.findall(r'[\u0590-\u05FF]', summary))
-        if hebrew_chars < len(summary) * 0.3:
+        total_chars = len(re.sub(r'\s', '', summary))
+        if total_chars == 0 or hebrew_chars < total_chars * 0.6:
             return False
         
-        # Check for artifacts
-        artifacts = ['<extra_id', 'summarize:', 'summary:', '▁']
-        if any(artifact in summary for artifact in artifacts):
+        # Check for artifacts and gibberish
+        artifacts = ['<extra_id', 'summarize:', 'summary:', '▁', 'undefined', 'null', 
+                    'NaN', '###', '***', '...', '???']
+        if any(artifact in summary.lower() for artifact in artifacts):
+            return False
+        
+        # Check for excessive repetitions (stricter)
+        words = summary.split()
+        if len(words) > 5:
+            # Count repeated 2-word phrases
+            repeated_phrases = 0
+            for i in range(len(words) - 3):
+                phrase = f"{words[i]} {words[i+1]}"
+                if phrase in ' '.join(words[i+2:]):
+                    repeated_phrases += 1
+            
+            # If more than 20% of phrases are repeated, it's bad quality
+            if repeated_phrases > len(words) * 0.2:
+                return False
+        
+        # Check for incomplete sentences and brackets
+        if (summary.count('(') != summary.count(')') or 
+            summary.count('[') != summary.count(']') or
+            summary.count('{') != summary.count('}')):
+            return False
+        
+        # Check sentence structure
+        sentences = [s.strip() for s in summary.split('.') if s.strip()]
+        if len(sentences) == 0:
+            return False
+        
+        # Check for very short or very long sentences
+        for sentence in sentences:
+            words_in_sentence = len(sentence.split())
+            if words_in_sentence < 3 or words_in_sentence > 50:
+                return False
+        
+        # Check for nonsensical character patterns
+        if re.search(r'[a-zA-Z]{10,}', summary):  # Long English sequences
+            return False
+        
+        if re.search(r'[\d\W]{5,}', summary):  # Long sequences of numbers/symbols
             return False
         
         return True
@@ -1162,6 +1541,7 @@ def summarize_api():
             return jsonify({"error": "Missing 'text' field"}), 400
         
         text = data.get("text", "").strip()
+        title = data.get("title", "").strip()
         if not text:
             return jsonify({"error": "Empty text provided"}), 400
         
@@ -1185,9 +1565,9 @@ def summarize_api():
         
         # Choose summarization method
         if method == "abstractive":
-            result = ai_summarizer.comprehensive_abstractive_summarize(text, target_ratio)
+            result = ai_summarizer.comprehensive_abstractive_summarize(text, target_ratio, title)
         else:
-            result = ai_summarizer.comprehensive_extractive_summarize(text, target_ratio)
+            result = ai_summarizer.comprehensive_extractive_summarize(text, target_ratio, title)
         
         return jsonify(result)
         

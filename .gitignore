@@ -4,7 +4,6 @@ venv/
 env/
 
 # AI Models (users download individually)
-models/
 *.bin
 *.safetensors
 

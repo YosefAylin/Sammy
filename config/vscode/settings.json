@@ -12,10 +12,8 @@
     "python.analysis.autoImportCompletions": true,
     "files.exclude": {
         "**/__pycache__": true,
-        "**/*.pyc": true,
-        "**/venv": true,
-        "**/models": true,
-        "**/*.pdf": true
+        "**/*.pyc": true
     },
-    "python.envFile": "${workspaceFolder}/.env"
+    "python.envFile": "${workspaceFolder}/.env",
+    "explorer.excludeGitIgnore": true
 }

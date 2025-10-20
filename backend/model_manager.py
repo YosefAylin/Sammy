@@ -28,9 +28,9 @@ class ModelManager:
                 'type': 'encoder'
             },
             'dicta': {
-                'name': 'Dicta-IL/dictalm2.0',
-                'local_path': self.models_dir / 'dicta-hebrew',
-                'type': 'causal'
+                'name': 'google/mt5-small',
+                'local_path': self.models_dir / 'mt5-small',
+                'type': 'seq2seq'
             }
         }
     
@@ -159,7 +159,7 @@ def main():
     parser = argparse.ArgumentParser(description="Manage Sammy AI models")
     parser.add_argument('action', choices=['download', 'list', 'clean'], 
                        help='Action to perform')
-    parser.add_argument('--model', choices=['alephbert', 'mt5', 'all'], 
+    parser.add_argument('--model', choices=['alephbert', 'dicta', 'all'], 
                        default='all', help='Model to download')
     parser.add_argument('--force', action='store_true', 
                        help='Force re-download even if exists')

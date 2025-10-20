@@ -4,11 +4,17 @@ class SummaryUI {
         this.scrapeButton = document.getElementById("scrape");
         this.lengthSlider = document.getElementById("length-slider");
         this.lengthValue = document.getElementById("length-value");
+        this.lengthControl = document.getElementById("length-control");
         this.methodSelect = document.getElementById("method-select");
         this.copyButton = document.getElementById("copy-btn");
         this.currentSummary = "";
+        this.lastProcessedText = "";
+        this.lastTitle = "";
+        this.currentUrl = "";
         
         this.initializeEventListeners();
+        this.cleanOldCache();
+        this.loadCachedSummary();
         this.loadSettings();
     }
     
@@ -17,7 +23,7 @@ class SummaryUI {
         
         if (this.lengthSlider) {
             this.lengthSlider.addEventListener("input", (e) => {
-                this.lengthValue.textContent = e.target.value;
+                this.updateLengthDisplay(e.target.value);
                 this.saveSettings();
             });
         }
@@ -40,12 +46,13 @@ class SummaryUI {
     
     loadSettings() {
         chrome.storage.local.get(['summaryLength', 'summaryMethod'], (result) => {
-            const length = result.summaryLength || 35; // Default to 35%
+            // Always start with 15 for the first summary
+            const length = 15; // Force default to קצר
             const method = result.summaryMethod || 'extractive';
             
             if (this.lengthSlider) {
                 this.lengthSlider.value = length;
-                this.lengthValue.textContent = length;
+                this.updateLengthDisplay(length);
             }
             
             if (this.methodSelect) {
@@ -71,6 +78,9 @@ class SummaryUI {
             'abstractive': 'יוצר סיכום חדש בשפה טבעית'
         };
         
+        // Hide slider when changing methods
+        this.hideLengthControl();
+        
         // Update button text based on method
         if (this.scrapeButton) {
             const buttonTexts = {
@@ -78,6 +88,23 @@ class SummaryUI {
                 'abstractive': 'סכם דף (איכותי)'
             };
             this.scrapeButton.querySelector('.button-text').textContent = buttonTexts[method];
+        }
+    }
+    
+    updateLengthDisplay(value) {
+        const numValue = parseInt(value);
+        let displayText;
+        
+        if (numValue <= 15) {
+            displayText = 'קצר';
+        } else if (numValue <= 30) {
+            displayText = 'רגיל';
+        } else {
+            displayText = 'ארוך';
+        }
+        
+        if (this.lengthValue) {
+            this.lengthValue.textContent = displayText;
         }
     }
     
@@ -112,11 +139,12 @@ class SummaryUI {
     showSummary(data) {
         this.currentSummary = data.summary;
         const metadata = data.metadata || {};
+        const isUltraShort = metadata.method === 'ultra_short_extractive';
         
         this.paraElement.innerHTML = `
             <div class="summary-container">
                 <div class="summary-text">${data.summary}</div>
-                ${metadata.compression_ratio ? `
+                ${(metadata.compression_ratio && metadata.summary_sentences && metadata.original_sentences) ? `
                     <div class="summary-stats">
                         דחיסה: ${Math.round(metadata.compression_ratio * 100)}% 
                         (${metadata.summary_sentences}/${metadata.original_sentences} משפטים)
@@ -124,6 +152,7 @@ class SummaryUI {
                 ` : ''}
                 <div class="summary-actions">
                     <button id="copy-summary" class="action-btn">העתק</button>
+                    ${(isUltraShort || metadata.summary_sentences <= 5) ? '<button id="expand-summary" class="action-btn expand-btn">הרחב סיכום</button>' : ''}
                     <button id="retry-summary" class="action-btn">סכם מחדש</button>
                 </div>
             </div>
@@ -133,10 +162,27 @@ class SummaryUI {
         document.getElementById("copy-summary").addEventListener("click", () => this.copyToClipboard());
         document.getElementById("retry-summary").addEventListener("click", () => this.handleScrape());
         
+        // Show length control and add expand functionality for short summaries
+        if (isUltraShort || metadata.summary_sentences <= 5) {
+            this.showLengthControl();
+            const expandBtn = document.getElementById("expand-summary");
+            if (expandBtn) {
+                expandBtn.addEventListener("click", () => this.expandSummary());
+            }
+        }
+        
+        // Save to cache
+        this.saveSummaryToCache(data, this.lastProcessedText, this.lastTitle);
+        
         this.hideLoading();
     }
     
     async handleScrape() {
+        // Clear cache for this URL to force fresh summary
+        if (this.currentUrl) {
+            chrome.storage.local.remove([`summary_${this.currentUrl}`]);
+        }
+        
         this.showLoading();
         
         // Set a timeout for the entire operation
@@ -177,7 +223,8 @@ class SummaryUI {
                 return;
             }
             
-            await this.requestSummary(filteredText);
+            // Include title in the request
+            await this.requestSummary(filteredText, message.title);
         } else if (message.type === "EXTRACTION_ERROR") {
             console.error("Content extraction failed:", message.error);
             this.showError("שגיאה בחילוץ הטקסט מהדף");
@@ -204,14 +251,19 @@ class SummaryUI {
         return null;
     }
     
-    async requestSummary(text) {
-        const summaryPercentage = this.lengthSlider ? parseInt(this.lengthSlider.value) : 35;
+    async requestSummary(text, title = '') {
+        // Store for potential expansion
+        this.lastProcessedText = text;
+        this.lastTitle = title;
+        
+        const summaryPercentage = this.lengthSlider ? parseInt(this.lengthSlider.value) : 15;
         const method = this.methodSelect ? this.methodSelect.value : 'extractive';
         const startTime = performance.now();
         
         try {
             const payload = { 
                 text: text,
+                title: title,
                 method: method,
                 target_ratio: summaryPercentage / 100,  // Convert percentage to ratio
                 max_length: Math.round(text.length * (summaryPercentage / 100) * 0.8)  // Estimate for abstractive
@@ -246,6 +298,163 @@ class SummaryUI {
             } else {
                 this.showError("שגיאה בסיכום הטקסט");
             }
+        }
+    }
+    
+    showLengthControl() {
+        if (this.lengthControl) {
+            this.lengthControl.style.display = 'flex';
+            // Add smooth animation
+            this.lengthControl.style.opacity = '0';
+            this.lengthControl.style.transform = 'translateY(-10px)';
+            
+            setTimeout(() => {
+                this.lengthControl.style.transition = 'all 0.3s ease';
+                this.lengthControl.style.opacity = '1';
+                this.lengthControl.style.transform = 'translateY(0)';
+            }, 100);
+        }
+    }
+    
+    hideLengthControl() {
+        if (this.lengthControl) {
+            this.lengthControl.style.display = 'none';
+        }
+    }
+    
+    async loadCachedSummary() {
+        try {
+            // Get current tab URL
+            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tabs.length === 0) return;
+            
+            this.currentUrl = tabs[0].url;
+            
+            // Check if we have a cached summary for this URL
+            chrome.storage.local.get([`summary_${this.currentUrl}`], (result) => {
+                const cachedData = result[`summary_${this.currentUrl}`];
+                
+                if (cachedData && this.isRecentCache(cachedData.timestamp)) {
+                    // Show cached summary
+                    this.showCachedSummary(cachedData);
+                }
+            });
+        } catch (error) {
+            console.log("Could not load cached summary:", error);
+        }
+    }
+    
+    isRecentCache(timestamp) {
+        // Cache is valid for 1 hour
+        const oneHour = 60 * 60 * 1000;
+        return (Date.now() - timestamp) < oneHour;
+    }
+    
+    showCachedSummary(cachedData) {
+        this.currentSummary = cachedData.summary;
+        const metadata = cachedData.metadata || {};
+        const isUltraShort = metadata.method === 'ultra_short_extractive';
+        
+        this.paraElement.innerHTML = `
+            <div class="summary-container">
+                <div class="cache-indicator">
+                    📋 סיכום שמור מהביקור הקודם
+                    <span class="cache-time">(${this.getTimeAgo(cachedData.timestamp)})</span>
+                </div>
+                <div class="summary-text">${cachedData.summary}</div>
+                ${(metadata.compression_ratio && metadata.summary_sentences && metadata.original_sentences) ? `
+                    <div class="summary-stats">
+                        דחיסה: ${Math.round(metadata.compression_ratio * 100)}% 
+                        (${metadata.summary_sentences}/${metadata.original_sentences} משפטים)
+                    </div>
+                ` : ''}
+                <div class="summary-actions">
+                    <button id="copy-summary" class="action-btn">העתק</button>
+                    ${(isUltraShort || metadata.summary_sentences <= 5) ? '<button id="expand-summary" class="action-btn expand-btn">הרחב סיכום</button>' : ''}
+                    <button id="refresh-summary" class="action-btn">סכם מחדש</button>
+                </div>
+            </div>
+        `;
+        
+        // Add event listeners
+        document.getElementById("copy-summary").addEventListener("click", () => this.copyToClipboard());
+        document.getElementById("refresh-summary").addEventListener("click", () => this.handleScrape());
+        
+        // Show length control and add expand functionality for short summaries
+        if (isUltraShort || metadata.summary_sentences <= 5) {
+            this.showLengthControl();
+            const expandBtn = document.getElementById("expand-summary");
+            if (expandBtn) {
+                expandBtn.addEventListener("click", () => this.expandSummary());
+            }
+        }
+        
+        // Store the cached data for potential expansion
+        this.lastProcessedText = cachedData.originalText || "";
+        this.lastTitle = cachedData.title || "";
+    }
+    
+    saveSummaryToCache(summaryData, originalText, title) {
+        if (!this.currentUrl) return;
+        
+        const cacheData = {
+            summary: summaryData.summary,
+            metadata: summaryData.metadata,
+            originalText: originalText,
+            title: title,
+            timestamp: Date.now(),
+            method: this.methodSelect ? this.methodSelect.value : 'extractive',
+            length: this.lengthSlider ? parseInt(this.lengthSlider.value) : 15
+        };
+        
+        // Save to Chrome storage
+        chrome.storage.local.set({
+            [`summary_${this.currentUrl}`]: cacheData
+        });
+    }
+    
+    cleanOldCache() {
+        // Clean cache entries older than 24 hours
+        chrome.storage.local.get(null, (items) => {
+            const keysToRemove = [];
+            const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+            
+            for (const [key, value] of Object.entries(items)) {
+                if (key.startsWith('summary_') && value.timestamp && value.timestamp < oneDayAgo) {
+                    keysToRemove.push(key);
+                }
+            }
+            
+            if (keysToRemove.length > 0) {
+                chrome.storage.local.remove(keysToRemove);
+                console.log(`Cleaned ${keysToRemove.length} old cache entries`);
+            }
+        });
+    }
+    
+    getTimeAgo(timestamp) {
+        const minutes = Math.floor((Date.now() - timestamp) / (1000 * 60));
+        if (minutes < 1) return "עכשיו";
+        if (minutes < 60) return `לפני ${minutes} דקות`;
+        const hours = Math.floor(minutes / 60);
+        return `לפני ${hours} שעות`;
+    }
+    
+    async expandSummary() {
+        // Get current slider value for expansion
+        const currentLength = parseInt(this.lengthSlider.value);
+        const newLength = currentLength === 15 ? 30 : 45; // Move to next level
+        
+        this.lengthSlider.value = newLength;
+        this.updateLengthDisplay(newLength);
+        this.saveSettings();
+        
+        // Show loading and re-summarize with new length
+        this.showLoading();
+        
+        // Get the last processed text (we'll need to store it)
+        if (this.lastProcessedText) {
+            await this.requestSummary(this.lastProcessedText, this.lastTitle);
         }
     }
     
