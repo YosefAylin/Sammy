@@ -26,11 +26,6 @@ class ModelManager:
                 'name': 'onlplab/alephbert-base',
                 'local_path': self.models_dir / 'alephbert-base',
                 'type': 'encoder'
-            },
-            'dicta': {
-                'name': 'google/mt5-small',
-                'local_path': self.models_dir / 'mt5-small',
-                'type': 'seq2seq'
             }
         }
     

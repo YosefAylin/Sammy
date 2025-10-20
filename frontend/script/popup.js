@@ -13,7 +13,6 @@ class SummaryUI {
         this.currentUrl = "";
         
         this.initializeEventListeners();
-        this.cleanOldCache();
         this.loadCachedSummary();
         this.loadSettings();
     }
@@ -180,7 +179,7 @@ class SummaryUI {
     async handleScrape() {
         // Clear cache for this URL to force fresh summary
         if (this.currentUrl) {
-            chrome.storage.local.remove([`summary_${this.currentUrl}`]);
+            chrome.storage.session.remove([`summary_${this.currentUrl}`]);
         }
         
         this.showLoading();
@@ -330,12 +329,12 @@ class SummaryUI {
             
             this.currentUrl = tabs[0].url;
             
-            // Check if we have a cached summary for this URL
-            chrome.storage.local.get([`summary_${this.currentUrl}`], (result) => {
+            // Check if we have a cached summary for this URL in session storage
+            chrome.storage.session.get([`summary_${this.currentUrl}`], (result) => {
                 const cachedData = result[`summary_${this.currentUrl}`];
                 
-                if (cachedData && this.isRecentCache(cachedData.timestamp)) {
-                    // Show cached summary
+                if (cachedData) {
+                    // Show cached summary (no time check needed - session storage clears on tab close/refresh)
                     this.showCachedSummary(cachedData);
                 }
             });
@@ -344,11 +343,7 @@ class SummaryUI {
         }
     }
     
-    isRecentCache(timestamp) {
-        // Cache is valid for 1 hour
-        const oneHour = 60 * 60 * 1000;
-        return (Date.now() - timestamp) < oneHour;
-    }
+
     
     showCachedSummary(cachedData) {
         this.currentSummary = cachedData.summary;
@@ -358,8 +353,7 @@ class SummaryUI {
         this.paraElement.innerHTML = `
             <div class="summary-container">
                 <div class="cache-indicator">
-                    📋 סיכום שמור מהביקור הקודם
-                    <span class="cache-time">(${this.getTimeAgo(cachedData.timestamp)})</span>
+                    📋 סיכום שמור (יימחק ברענון הדף)
                 </div>
                 <div class="summary-text">${cachedData.summary}</div>
                 ${(metadata.compression_ratio && metadata.summary_sentences && metadata.original_sentences) ? `
@@ -407,38 +401,15 @@ class SummaryUI {
             length: this.lengthSlider ? parseInt(this.lengthSlider.value) : 15
         };
         
-        // Save to Chrome storage
-        chrome.storage.local.set({
+        // Save to Chrome session storage (clears on tab close/refresh)
+        chrome.storage.session.set({
             [`summary_${this.currentUrl}`]: cacheData
         });
     }
     
-    cleanOldCache() {
-        // Clean cache entries older than 24 hours
-        chrome.storage.local.get(null, (items) => {
-            const keysToRemove = [];
-            const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
-            
-            for (const [key, value] of Object.entries(items)) {
-                if (key.startsWith('summary_') && value.timestamp && value.timestamp < oneDayAgo) {
-                    keysToRemove.push(key);
-                }
-            }
-            
-            if (keysToRemove.length > 0) {
-                chrome.storage.local.remove(keysToRemove);
-                console.log(`Cleaned ${keysToRemove.length} old cache entries`);
-            }
-        });
-    }
+
     
-    getTimeAgo(timestamp) {
-        const minutes = Math.floor((Date.now() - timestamp) / (1000 * 60));
-        if (minutes < 1) return "עכשיו";
-        if (minutes < 60) return `לפני ${minutes} דקות`;
-        const hours = Math.floor(minutes / 60);
-        return `לפני ${hours} שעות`;
-    }
+
     
     async expandSummary() {
         // Get current slider value for expansion

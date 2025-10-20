@@ -11,10 +11,11 @@ Transformed the basic extension into a professional AI-powered system:
 - **Professional Setup**: Virtual environments, automated installation, cross-platform support
 
 ### 🧠 **AI Capabilities Added**
-- **Two AI Models**: AlephBERT (Hebrew understanding) + Dicta Hebrew LM (text generation)
-- **Dual Methods**: Fast extractive vs. smart abstractive summarization
-- **Hebrew Optimization**: Native Hebrew models, stopwords, connectors, noise filtering
-- **Smart Extraction**: Comprehensive text analysis from opening to closing
+- **AlephBERT Model**: Advanced Hebrew understanding and semantic analysis
+- **Dual Methods**: Fast extractive vs. intelligent abstractive summarization
+- **Hebrew Optimization**: Native Hebrew processing, stopwords, connectors, noise filtering
+- **Comprehensive Analysis**: Full text understanding from opening to closing sections
+- **Smart Rewriting**: Abstractive method creates new flowing Hebrew summaries
 
 ### 🎛️ **User Experience Improvements**
 - **Percentage Control**: Slider to choose 20-60% summary length (more intuitive than sentence count)
@@ -41,13 +42,16 @@ Then:
 2. Install Chrome extension from `frontend/` folder
 3. Test on Hebrew websites
 
+**Optional**: Copy `.env.example` to `.env` for custom settings (server port, AI device, etc.)
+
 ## Key Technical Achievements
 
 ### Backend (`backend/ai_server.py`)
-- **AlephBERT Integration**: Hebrew semantic understanding
-- **Dicta Hebrew LM**: Native Hebrew text generation for abstractive summaries
-- **Comprehensive Algorithm**: Sectional analysis, key insight detection
-- **Performance Optimization**: Caching, batch processing, fallback systems
+- **AlephBERT Integration**: Advanced Hebrew semantic understanding and embeddings
+- **Comprehensive Extractive**: Multi-section analysis with theme awareness
+- **Hebrew-Optimized Abstractive**: Intelligent paraphrasing and concept synthesis
+- **Performance Optimization**: Embedding caching, batch processing, fallback systems
+- **Quality Assurance**: Strict validation, noise filtering, coherence checking
 
 ### Frontend (`frontend/`)
 - **Smart Content Extraction**: Noise filtering, section identification
@@ -63,7 +67,8 @@ Then:
 
 ## What Works Now
 
-✅ **AI-Powered Summarization**: Real Hebrew understanding with AlephBERT + Dicta Hebrew LM  
+✅ **AI-Powered Summarization**: Advanced Hebrew understanding with AlephBERT model  
+✅ **Dual AI Methods**: Fast extractive + intelligent abstractive summarization  
 ✅ **Percentage-Based Control**: Intuitive 20-60% summary length slider  
 ✅ **Professional Quality**: Error handling, loading states, proper feedback  
 ✅ **Ultra-Simple Setup**: Two commands only (setup.py + run.py)  
@@ -71,9 +76,9 @@ Then:
 
 ## Latest Updates
 
-### 🎯 **Simplified User Interface**
+### 🎯 **Ultra-Minimal Structure**
 - **Root Directory**: Only 2 scripts (setup.py + run.py)
-- **Hidden Complexity**: All technical files moved to config/
+- **No Config Directory**: Everything essential is in root or organized folders
 - **Percentage Control**: Changed from sentence count to percentage-based summarization
 - **Better UX**: More intuitive and professional appearance
 
@@ -82,16 +87,16 @@ Then:
 Sammy/
 ├── setup.py          # 🔧 One-command setup
 ├── run.py            # 🚀 One-command start
-├── backend/          # 🧠 AI server
-├── frontend/         # 🎨 Chrome extension
-└── config/           # ⚙️ All technical files (hidden)
+├── .env.example      # ⚙️ Optional settings template
+├── backend/          # 🧠 AI server & models
+└── frontend/         # 🎨 Chrome extension
 ```
 
 ### 🔧 **Files Changed/Added**
-- `setup.py` + `run.py` - Ultra-simple user interface
-- `backend/ai_server.py` - Complete AI system with percentage support
+- `setup.py` + `run.py` - Ultra-simple user interface (2 commands only)
+- `backend/ai_server.py` - Complete AI system with AlephBERT integration
 - `frontend/script/` - Enhanced extension with percentage control
-- `config/scripts/` - All utility scripts moved here
+- `.env.example` - Optional environment settings (moved to root for simplicity)
 
 ---
 
